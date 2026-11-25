@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Text.Json;
 using TurnOva.Domain.Dispatch;
 using TurnOva.Infrastructure.Dispatch;
@@ -116,6 +117,31 @@ public sealed class DriverRideReservationStoreTests
     }
 
     [Fact]
+    public async Task PromotionObservesCancellationWhenConcurrentReleaseInvalidatesItsSnapshot()
+    {
+        var clock = new CallbackTimeProvider(DateTimeOffset.UtcNow);
+        var store = new InMemoryDriverRideReservationStore(clock);
+        Assert.True(await store.TryAcquireTemporaryAsync(
+            "driver-cancel-race", "ride-cancel-race", clock.GetUtcNow().AddMinutes(5)));
+
+        using var cancellation = new CancellationTokenSource();
+        clock.OnGetUtcNow = () =>
+        {
+            cancellation.Cancel();
+            Assert.True(store.TryReleaseAsync("driver-cancel-race", "ride-cancel-race")
+                .GetAwaiter().GetResult());
+        };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.TryMakePermanentAsync("driver-cancel-race", "ride-cancel-race", cancellation.Token));
+
+        Assert.Null(await store.GetActiveAsync("driver-cancel-race"));
+        Assert.Equal(
+            new[] { DriverRideReservationAuditEventTypes.Acquired, DriverRideReservationAuditEventTypes.Released },
+            store.GetAuditEvents("driver-cancel-race").Select(item => item.EventType));
+    }
+
+    [Fact]
     public async Task ExpiredTemporaryReservationRemainsHeldUntilRideLifecycleReconciliation()
     {
         var store = new InMemoryDriverRideReservationStore();
@@ -198,6 +224,54 @@ public sealed class DriverRideReservationStoreTests
         var expired = Assert.Single(reservations, reservation => reservation.DriverId == "driver-b");
         Assert.Equal("ride-b", expired.RideId);
         Assert.True(expired.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow);
+    }
+
+    [Fact]
+    public async Task GetActiveForDriversHonorsPreCancelledTokenBeforeNullCollectionValidation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var store = new InMemoryDriverRideReservationStore();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.GetActiveForDriversAsync(null!, cancellation.Token));
+    }
+
+    [Fact]
+    public async Task GetActiveForDriversRejectsNullCollectionWithoutCancellation()
+    {
+        var store = new InMemoryDriverRideReservationStore();
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            store.GetActiveForDriversAsync(null!, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetActiveForDriversHonorsCancellationDuringDriverIdEnumeration()
+    {
+        var store = new InMemoryDriverRideReservationStore();
+        Assert.True(await store.TryAcquireAsync("driver-a", "ride-a"));
+        using var cancellation = new CancellationTokenSource();
+        var driverIds = new CancellingDriverIds(cancellation, yieldSecond: true);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.GetActiveForDriversAsync(driverIds, cancellation.Token));
+
+        Assert.Equal("ride-a", (await store.GetActiveAsync("driver-a"))?.RideId);
+    }
+
+    [Fact]
+    public async Task GetActiveForDriversHonorsCancellationAfterDriverIdEnumeration()
+    {
+        var store = new InMemoryDriverRideReservationStore();
+        Assert.True(await store.TryAcquireAsync("driver-a", "ride-a"));
+        using var cancellation = new CancellationTokenSource();
+        var driverIds = new CancellingDriverIds(cancellation, yieldSecond: false);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.GetActiveForDriversAsync(driverIds, cancellation.Token));
+
+        Assert.Equal("ride-a", (await store.GetActiveAsync("driver-a"))?.RideId);
     }
 
     [Fact]
@@ -294,6 +368,153 @@ public sealed class DriverRideReservationStoreTests
             reservation, eventType!, null,
             previousExpiresAtUtc: null,
             expiresAtUtc: null));
+    }
+
+    [Theory]
+    [InlineData("", "ride-1")]
+    [InlineData(" ", "ride-1")]
+    [InlineData("driver-1", "")]
+    [InlineData("driver-1", " ")]
+    public async Task AcquireRejectsBlankDriverOrRideIdBeforeStoringReservation(string driverId, string rideId)
+    {
+        var store = new InMemoryDriverRideReservationStore();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => store.TryAcquireAsync(driverId, rideId));
+
+        Assert.Null(await store.GetActiveAsync("driver-1"));
+        Assert.Empty(store.GetAuditEvents("driver-1"));
+    }
+
+    [Fact]
+    public async Task AcquireHonorsPreCancelledTokenBeforeBlankDriverOrRideIdValidation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var store = new InMemoryDriverRideReservationStore();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.TryAcquireAsync(" ", "ride-1", cancellation.Token));
+
+        Assert.Null(await store.GetActiveAsync("driver-1"));
+        Assert.Empty(store.GetAuditEvents("driver-1"));
+    }
+
+
+
+    [Theory]
+    [InlineData("", "ride-1")]
+    [InlineData(" ", "ride-1")]
+    [InlineData("driver-1", "")]
+    [InlineData("driver-1", " ")]
+    public async Task PromoteRejectsBlankDriverOrRideIdBeforeStateAccess(string driverId, string rideId)
+    {
+        var store = new InMemoryDriverRideReservationStore();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => store.TryMakePermanentAsync(driverId, rideId));
+
+        Assert.Null(await store.GetActiveAsync("driver-1"));
+        Assert.Empty(store.GetAuditEvents("driver-1"));
+    }
+
+    [Theory]
+    [InlineData("", "ride-1")]
+    [InlineData(" ", "ride-1")]
+    [InlineData("driver-1", "")]
+    [InlineData("driver-1", " ")]
+    public async Task SetExpiryRejectsBlankDriverOrRideIdBeforeStateAccess(string driverId, string rideId)
+    {
+        var store = new InMemoryDriverRideReservationStore();
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            store.TrySetExpiryAsync(driverId, rideId, DateTimeOffset.UtcNow.AddMinutes(5)));
+
+        Assert.Null(await store.GetActiveAsync("driver-1"));
+        Assert.Empty(store.GetAuditEvents("driver-1"));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public async Task ActiveReadAndHasActiveRejectBlankDriverId(string driverId)
+    {
+        var store = new InMemoryDriverRideReservationStore();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => store.GetActiveAsync(driverId));
+        await Assert.ThrowsAsync<ArgumentException>(() => store.HasActiveAsync(driverId));
+
+        Assert.Null(await store.GetActiveAsync("driver-1"));
+        Assert.Empty(store.GetAuditEvents("driver-1"));
+    }
+
+    [Theory]
+    [InlineData("", "ride-1")]
+    [InlineData(" ", "ride-1")]
+    [InlineData("driver-1", "")]
+    [InlineData("driver-1", " ")]
+    public async Task ReleaseRejectsBlankDriverOrRideIdBeforeStateAccess(string driverId, string rideId)
+    {
+        var store = new InMemoryDriverRideReservationStore();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => store.TryReleaseAsync(driverId, rideId));
+
+        Assert.Null(await store.GetActiveAsync("driver-1"));
+        Assert.Empty(store.GetAuditEvents("driver-1"));
+    }
+
+    [Fact]
+    public async Task NonAcquireOperationsHonorPreCancelledTokenBeforeInputValidation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var store = new InMemoryDriverRideReservationStore();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.TryMakePermanentAsync(" ", "ride-1", cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.TrySetExpiryAsync("driver-1", " ", DateTimeOffset.UtcNow.AddMinutes(5), cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.GetActiveAsync(" ", cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.TryReleaseAsync("driver-1", " ", cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.HasActiveAsync(" ", cancellation.Token));
+
+        Assert.Null(await store.GetActiveAsync("driver-1"));
+        Assert.Empty(store.GetAuditEvents("driver-1"));
+    }
+    private sealed class CallbackTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        private Action? _onGetUtcNow;
+        public override DateTimeOffset GetUtcNow()
+        {
+            var callback = _onGetUtcNow;
+            _onGetUtcNow = null;
+            callback?.Invoke();
+            return utcNow;
+        }
+
+        public Action? OnGetUtcNow
+        {
+            get => _onGetUtcNow;
+            set => _onGetUtcNow = value;
+        }
+    }
+
+    private sealed class CancellingDriverIds(
+        CancellationTokenSource cancellation,
+        bool yieldSecond) : IReadOnlyCollection<string>
+    {
+        public int Count => yieldSecond ? 2 : 1;
+
+        public IEnumerator<string> GetEnumerator()
+        {
+            yield return "driver-a";
+            cancellation.Cancel();
+            if (yieldSecond)
+                yield return "driver-b";
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
 }

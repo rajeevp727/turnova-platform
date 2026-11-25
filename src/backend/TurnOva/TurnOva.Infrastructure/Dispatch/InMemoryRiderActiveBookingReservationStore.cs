@@ -23,16 +23,27 @@ public sealed class InMemoryRiderActiveBookingReservationStore : IRiderActiveBoo
         DriverRideReservationAuditContext? auditContext = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (reservation.ExpiresAtUtc is { } expiry && expiry <= _timeProvider.GetUtcNow())
-            return Task.FromResult(RiderBookingReservationAcquireResult.Conflict);
+        ArgumentNullException.ThrowIfNull(reservation);
+        ArgumentException.ThrowIfNullOrWhiteSpace(reservation.RiderId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(reservation.RideId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(reservation.RequestHash);
+        if (reservation.ExpiresAtUtc is { } expiry)
+        {
+            var now = _timeProvider.GetUtcNow();
+            cancellationToken.ThrowIfCancellationRequested();
+            if (expiry <= now)
+                return Task.FromResult(RiderBookingReservationAcquireResult.Conflict);
+        }
 
         while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!_items.TryGetValue(reservation.RiderId, out var state))
             {
                 var audit = RiderActiveBookingReservationAuditEvent.Create(
                     reservation, RiderActiveBookingReservationAuditEventTypes.Acquired,
                     auditContext, previousExpiresAtUtc: null, reservation.ExpiresAtUtc);
+                cancellationToken.ThrowIfCancellationRequested();
                 if (_items.TryAdd(reservation.RiderId, new ReservationState(reservation, [audit])))
                     return Task.FromResult(RiderBookingReservationAcquireResult.Acquired);
                 continue;
@@ -40,13 +51,18 @@ public sealed class InMemoryRiderActiveBookingReservationStore : IRiderActiveBoo
 
             if (state.Reservation is { } current)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (current.RideId == reservation.RideId &&
                     current.RequestHash == reservation.RequestHash &&
                     (current.ExpiresAtUtc is null || current.ExpiresAtUtc > _timeProvider.GetUtcNow()))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
                     return Task.FromResult(RiderBookingReservationAcquireResult.AlreadyOwned);
+                }
 
                 // Expiry is reconciled by the API against the authoritative ride state.
                 // The store never steals a reservation based on its timestamp alone.
+                cancellationToken.ThrowIfCancellationRequested();
                 return Task.FromResult(RiderBookingReservationAcquireResult.Conflict);
             }
 
@@ -58,6 +74,7 @@ public sealed class InMemoryRiderActiveBookingReservationStore : IRiderActiveBoo
                 Reservation = reservation,
                 AuditEvents = [.. state.AuditEvents, created]
             };
+            cancellationToken.ThrowIfCancellationRequested();
             if (_items.TryUpdate(reservation.RiderId, next, state))
                 return Task.FromResult(RiderBookingReservationAcquireResult.Acquired);
         }
@@ -68,6 +85,7 @@ public sealed class InMemoryRiderActiveBookingReservationStore : IRiderActiveBoo
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentException.ThrowIfNullOrWhiteSpace(riderId);
         return Task.FromResult(
             _items.TryGetValue(riderId, out var state) ? state.Reservation : null);
     }
@@ -80,16 +98,31 @@ public sealed class InMemoryRiderActiveBookingReservationStore : IRiderActiveBoo
         bool allowExpiredForAuthoritativeActiveRide = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        while (_items.TryGetValue(riderId, out var state))
+        ArgumentException.ThrowIfNullOrWhiteSpace(riderId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(rideId);
+        while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!_items.TryGetValue(riderId, out var state))
+                return Task.FromResult(false);
             var current = state.Reservation;
             if (current is null || current.RideId != rideId)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
                 return Task.FromResult(false);
-            if (current.ExpiresAtUtc is { } expiry && expiry <= _timeProvider.GetUtcNow() &&
-                !allowExpiredForAuthoritativeActiveRide)
-                return Task.FromResult(false);
+            }
+            if (current.ExpiresAtUtc is { } expiry && !allowExpiredForAuthoritativeActiveRide)
+            {
+                var now = _timeProvider.GetUtcNow();
+                cancellationToken.ThrowIfCancellationRequested();
+                if (expiry <= now)
+                    return Task.FromResult(false);
+            }
             if (current.ExpiresAtUtc is null)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
                 return Task.FromResult(true);
+            }
 
             var updated = current with { ExpiresAtUtc = null };
             var audit = RiderActiveBookingReservationAuditEvent.Create(
@@ -100,11 +133,11 @@ public sealed class InMemoryRiderActiveBookingReservationStore : IRiderActiveBoo
                 Reservation = updated,
                 AuditEvents = [.. state.AuditEvents, audit]
             };
+            cancellationToken.ThrowIfCancellationRequested();
             if (_items.TryUpdate(riderId, next, state))
                 return Task.FromResult(true);
         }
 
-        return Task.FromResult(false);
     }
 
     public Task<bool> TryReleaseAsync(
@@ -114,11 +147,19 @@ public sealed class InMemoryRiderActiveBookingReservationStore : IRiderActiveBoo
         DriverRideReservationAuditContext? auditContext = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        while (_items.TryGetValue(riderId, out var state))
+        ArgumentException.ThrowIfNullOrWhiteSpace(riderId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(rideId);
+        while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!_items.TryGetValue(riderId, out var state))
+                return Task.FromResult(false);
             var current = state.Reservation;
             if (current is null || current.RideId != rideId)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
                 return Task.FromResult(false);
+            }
 
             var audit = RiderActiveBookingReservationAuditEvent.Create(
                 current, RiderActiveBookingReservationAuditEventTypes.Released,
@@ -128,11 +169,11 @@ public sealed class InMemoryRiderActiveBookingReservationStore : IRiderActiveBoo
                 Reservation = null,
                 AuditEvents = [.. state.AuditEvents, audit]
             };
+            cancellationToken.ThrowIfCancellationRequested();
             if (_items.TryUpdate(riderId, next, state))
                 return Task.FromResult(true);
         }
 
-        return Task.FromResult(false);
     }
 
     public IReadOnlyList<RiderActiveBookingReservationAuditEvent> GetAuditEvents(string riderId) =>

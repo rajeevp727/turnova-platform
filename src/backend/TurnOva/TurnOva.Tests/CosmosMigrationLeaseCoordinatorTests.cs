@@ -7,6 +7,121 @@ namespace TurnOva.Tests;
 public sealed class CosmosMigrationLeaseCoordinatorTests
 {
     [Fact]
+    public async Task AcquireChecksCancellationAfterCreateConflictBeforeCanonicalRead()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var store = new FakeLeaseStore { OnCreate = () => cancellation.Cancel() };
+        store.CreateResults.Enqueue(null);
+        var delay = new ImmediateDelay();
+        var coordinator = CreateCoordinator(store, delay);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            coordinator.AcquireAsync(cancellation.Token));
+
+        Assert.Equal(1, store.CreateCallCount);
+        Assert.Equal(0, store.ReadCallCount);
+        Assert.Equal(0, delay.CallCount);
+    }
+
+    [Fact]
+    public async Task AcquireChecksCancellationAfterCanonicalReadBeforeRetryDelay()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var active = new CosmosMigrationLease(
+            "schema-migrations", "active-owner", "etag-active", DateTimeOffset.UtcNow.AddHours(1));
+        var store = new FakeLeaseStore
+        {
+            ReadResult = active,
+            OnRead = () => cancellation.Cancel()
+        };
+        store.CreateResults.Enqueue(null);
+        var delay = new ImmediateDelay();
+        var coordinator = CreateCoordinator(store, delay);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            coordinator.AcquireAsync(cancellation.Token));
+
+        Assert.Equal(1, store.ReadCallCount);
+        Assert.Equal(0, delay.CallCount);
+    }
+
+    [Fact]
+    public async Task AcquireChecksCancellationAfterLostExpiredLeaseReplaceBeforeRetryDelay()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var expired = new CosmosMigrationLease(
+            "schema-migrations", "previous-owner", "etag-old", DateTimeOffset.UtcNow.AddMinutes(-1));
+        var store = new FakeLeaseStore
+        {
+            ReadResult = expired,
+            ReplaceResult = null,
+            OnReplace = () => cancellation.Cancel()
+        };
+        store.CreateResults.Enqueue(null);
+        var delay = new ImmediateDelay();
+        var coordinator = CreateCoordinator(store, delay);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            coordinator.AcquireAsync(cancellation.Token));
+
+        Assert.Equal(expired, store.LastExpectedLease);
+        Assert.Equal(0, delay.CallCount);
+    }
+
+    [Fact]
+    public async Task AcquireReturnsCommittedLeaseWhenCancellationArrivesAfterCreate()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var created = new CosmosMigrationLease(
+            "schema-migrations", "created-owner", "etag-created", DateTimeOffset.UtcNow.AddMinutes(30));
+        var store = new FakeLeaseStore { OnCreate = () => cancellation.Cancel() };
+        store.CreateResults.Enqueue(created);
+        var coordinator = CreateCoordinator(store, new ImmediateDelay());
+
+        var result = await coordinator.AcquireAsync(cancellation.Token);
+
+        Assert.True(cancellation.IsCancellationRequested);
+        Assert.Equal(created, result);
+    }
+
+    [Fact]
+    public async Task RenewalLostRaceDoesNotMaskCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var current = new CosmosMigrationLease(
+            "schema-migrations", "owner-1", "etag-1", DateTimeOffset.UtcNow.AddMinutes(20));
+        var store = new FakeLeaseStore
+        {
+            ReplaceResult = null,
+            OnReplace = () => cancellation.Cancel()
+        };
+        var coordinator = CreateCoordinator(store, new ImmediateDelay());
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            coordinator.RenewOnceAsync(current, cancellation.Token));
+    }
+
+    [Fact]
+    public async Task RenewalReturnsCommittedLeaseWhenCancellationArrivesAfterReplace()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var current = new CosmosMigrationLease(
+            "schema-migrations", "owner-1", "etag-1", DateTimeOffset.UtcNow.AddMinutes(20));
+        var renewed = current with { ETag = "etag-2" };
+        var store = new FakeLeaseStore
+        {
+            ReplaceResult = renewed,
+            OnReplace = () => cancellation.Cancel()
+        };
+        var coordinator = CreateCoordinator(store, new ImmediateDelay());
+
+        var result = await coordinator.RenewOnceAsync(current, cancellation.Token);
+
+        Assert.True(cancellation.IsCancellationRequested);
+        Assert.Equal("etag-2", result.ETag);
+    }
+
+    [Fact]
     public async Task AcquireRecoversExpiredLeaseUsingTheObservedEtag()
     {
         var now = DateTimeOffset.UtcNow;
@@ -255,8 +370,12 @@ public sealed class CosmosMigrationLeaseCoordinatorTests
     {
         public Queue<CosmosMigrationLease?> CreateResults { get; } = new();
         public int CreateCallCount { get; private set; }
+        public int ReadCallCount { get; private set; }
         public CosmosMigrationLease? ReadResult { get; init; }
         public CosmosMigrationLease? ReplaceResult { get; init; }
+        public Action? OnCreate { get; init; }
+        public Action? OnRead { get; init; }
+        public Action? OnReplace { get; init; }
         public CosmosMigrationLease? LastExpectedLease { get; private set; }
         public string? LastReplacementOwner { get; private set; }
         public CosmosMigrationLease? ReleasedLease { get; private set; }
@@ -265,11 +384,16 @@ public sealed class CosmosMigrationLeaseCoordinatorTests
             string owner, DateTimeOffset expiresAtUtc, CancellationToken cancellationToken)
         {
             CreateCallCount++;
+            OnCreate?.Invoke();
             return Task.FromResult(CreateResults.Count == 0 ? null : CreateResults.Dequeue());
         }
 
-        public Task<CosmosMigrationLease?> ReadAsync(CancellationToken cancellationToken) =>
-            Task.FromResult(ReadResult);
+        public Task<CosmosMigrationLease?> ReadAsync(CancellationToken cancellationToken)
+        {
+            ReadCallCount++;
+            OnRead?.Invoke();
+            return Task.FromResult(ReadResult);
+        }
 
         public Task<CosmosMigrationLease?> TryReplaceAsync(
             CosmosMigrationLease expected, string newOwner, DateTimeOffset expiresAtUtc,
@@ -277,6 +401,7 @@ public sealed class CosmosMigrationLeaseCoordinatorTests
         {
             LastExpectedLease = expected;
             LastReplacementOwner = newOwner;
+            OnReplace?.Invoke();
             return Task.FromResult(ReplaceResult is null
                 ? null
                 : ReplaceResult with { Owner = newOwner, ExpiresAtUtc = expiresAtUtc });

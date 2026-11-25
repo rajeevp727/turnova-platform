@@ -16,6 +16,8 @@ public sealed class DispatchExceptionAuditWriter(IQueueAuditEventStore store)
         string reasonCategory,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        DispatchExceptionAuditInput.Validate(actorId, zoneId, serviceClass, traceId, reasonCategory);
         var partitionKey = $"{zoneId.Trim().ToLowerInvariant()}|{serviceClass.Trim().ToLowerInvariant()}";
         var auditEvent = new QueueAuditEvent(
             $"dispatch-exception-{traceId}",
@@ -29,7 +31,9 @@ public sealed class DispatchExceptionAuditWriter(IQueueAuditEventStore store)
         if (await store.TryCreateAsync(auditEvent, partitionKey, cancellationToken))
             return;
 
+        cancellationToken.ThrowIfCancellationRequested();
         var existing = await store.ReadAsync(auditEvent.EventId, partitionKey, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         if (IsSameAudit(existing, auditEvent))
             return;
 
@@ -47,5 +51,7 @@ public sealed class DispatchExceptionAuditWriter(IQueueAuditEventStore store)
         existing.DriverId == expected.DriverId &&
         existing.TraceId == expected.TraceId &&
         existing.ReasonCategory == expected.ReasonCategory &&
-        existing.OfferId is null;
+        existing.OfferId is null &&
+        existing.OccurredAtUtc != default &&
+        existing.OccurredAtUtc.Offset == TimeSpan.Zero;
 }

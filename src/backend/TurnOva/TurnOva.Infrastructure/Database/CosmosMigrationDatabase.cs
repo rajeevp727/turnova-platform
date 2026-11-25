@@ -11,6 +11,7 @@ public sealed class CosmosMigrationDatabase(CosmosDatabase database) : ICosmosMi
         CancellationToken cancellationToken,
         int? defaultTimeToLive = null)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(containerName))
             throw new ArgumentException("Container name is required.", nameof(containerName));
         if (string.IsNullOrWhiteSpace(partitionKeyPath) || !partitionKeyPath.StartsWith("/", StringComparison.Ordinal))
@@ -20,19 +21,64 @@ public sealed class CosmosMigrationDatabase(CosmosDatabase database) : ICosmosMi
         {
             DefaultTimeToLive = defaultTimeToLive
         };
-        var response = await database.CreateContainerIfNotExistsAsync(
-            properties,
-            cancellationToken: cancellationToken);
+        var response = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+            () => database.CreateContainerIfNotExistsAsync(
+                properties,
+                cancellationToken: cancellationToken),
+            cancellationToken);
+
+        // Container creation is a committed write. Validate its response without
+        // retroactively turning a successful create into cancellation.
+        var createdProperties = CosmosReadResponseGuard.ReadResponseResource(
+            response,
+            static containerResponse => containerResponse.Resource,
+            value => string.Equals(value.Id, containerName, StringComparison.Ordinal) &&
+                string.Equals(value.PartitionKeyPath, partitionKeyPath, StringComparison.Ordinal),
+            "container",
+            CancellationToken.None,
+            "Cosmos returned a container resource that does not match the requested name and partition-key path after container creation.",
+            "Cosmos returned an empty container resource after container creation.");
 
         if (defaultTimeToLive.HasValue)
         {
-            var current = await response.Container.ReadContainerAsync(cancellationToken: cancellationToken);
-            if (current.Resource.DefaultTimeToLive != defaultTimeToLive)
+            cancellationToken.ThrowIfCancellationRequested();
+            var container = CosmosReadResponseGuard.ReadResponseResource(
+                response,
+                static containerResponse => containerResponse.Container,
+                value => string.Equals(value.Id, containerName, StringComparison.Ordinal),
+                "container handle",
+                cancellationToken,
+                "Cosmos returned a container handle that does not match the requested name for TTL configuration.",
+                "Cosmos returned an empty container handle for TTL configuration.");
+            var current = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => container.ReadContainerAsync(cancellationToken: cancellationToken),
+                cancellationToken);
+            var currentProperties = CosmosReadResponseGuard.ReadResponseResource(
+                current,
+                static containerResponse => containerResponse.Resource,
+                value => string.Equals(value.Id, containerName, StringComparison.Ordinal) &&
+                    string.Equals(value.PartitionKeyPath, partitionKeyPath, StringComparison.Ordinal),
+                "container",
+                cancellationToken,
+                "Cosmos returned a container resource that does not match the requested name and partition-key path for TTL configuration.",
+                "Cosmos returned an empty container resource for TTL configuration.");
+
+            if (currentProperties.DefaultTimeToLive != defaultTimeToLive)
             {
-                current.Resource.DefaultTimeToLive = defaultTimeToLive;
-                await response.Container.ReplaceContainerAsync(
-                    current.Resource,
-                    cancellationToken: cancellationToken);
+                var etag = CosmosReadResponseGuard.ReadResponseEtag(
+                    current, static containerResponse => containerResponse.ETag, cancellationToken);
+                if (!CosmosEtagPolicy.HasObservedEtag(etag))
+                    throw new InvalidOperationException(
+                        "Cosmos did not return an ETag for the container before applying its TTL configuration.");
+
+                currentProperties.DefaultTimeToLive = defaultTimeToLive;
+                cancellationToken.ThrowIfCancellationRequested();
+                _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                    () => container.ReplaceContainerAsync(
+                        currentProperties,
+                        new ContainerRequestOptions { IfMatchEtag = etag },
+                        cancellationToken),
+                    cancellationToken);
             }
         }
     }

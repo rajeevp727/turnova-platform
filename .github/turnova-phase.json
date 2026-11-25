@@ -1,5 +1,5 @@
 {
-  "api": "complete",
-  "android": "in_progress",
+  "api": "in_progress",
+  "android": "not_started",
   "ios": "not_started"
 }

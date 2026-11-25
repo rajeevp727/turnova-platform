@@ -58,6 +58,20 @@ public static class DriverProfileReviewGuard
               DriverUnionAuditReason.IsNormalizedSafe(profile.ProfilePhotoReviewReason);
     }
 
+    public static bool IsApprovedForUnionVisibility(DriverOnboardingProfile profile, string unionId)
+    {
+        if (string.IsNullOrWhiteSpace(unionId) ||
+            profile.ProfilePhotoApprovalStatus != "Approved" ||
+            !string.Equals(profile.ProfilePhotoApprovedByUnionId, unionId, StringComparison.Ordinal) ||
+            HasOperationsReviewMetadata(profile))
+            return false;
+
+        // Preserve legacy approvals that predate immutable review snapshots, but fail closed
+        // whenever new review metadata is present and incomplete or bound to another Union.
+        return !HasUnionReviewMetadata(profile) ||
+            (HasCompleteUnionReviewSnapshot(profile) &&
+             string.Equals(profile.ProfilePhotoUnionReviewUnionId, unionId, StringComparison.Ordinal));
+    }
     public static bool IsSameUnionSelfieReview(
         DriverOnboardingProfile profile,
         string status,

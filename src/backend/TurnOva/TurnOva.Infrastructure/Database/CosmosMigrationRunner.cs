@@ -1,5 +1,6 @@
 using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Logging;
+using CosmosDatabase = Microsoft.Azure.Cosmos.Database;
 
 namespace TurnOva.Infrastructure.Database;
 
@@ -15,18 +16,30 @@ public sealed class CosmosMigrationRunner(
 
     public async Task RunAsync(CancellationToken cancellationToken = default)
     {
-        var databaseResponse = await client.CreateDatabaseIfNotExistsAsync(
-            options.DatabaseName, throughput: 400, cancellationToken: cancellationToken);
-        var database = databaseResponse.Database;
+        cancellationToken.ThrowIfCancellationRequested();
+        var databaseResponse = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+            () => client.CreateDatabaseIfNotExistsAsync(
+                options.DatabaseName, throughput: 400, cancellationToken: cancellationToken),
+            cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        var database = CosmosReadResponseGuard.ReadResponseResource(
+            databaseResponse,
+            static response => response.Database,
+            value => !string.IsNullOrWhiteSpace(options.DatabaseName) &&
+                string.Equals(value.Id, options.DatabaseName, StringComparison.Ordinal),
+            "migration database handle",
+            cancellationToken,
+            "Cosmos returned a migration database handle that does not match the configured database name after bootstrap.",
+            "Cosmos returned an empty migration database handle after bootstrap.");
 
-        var historyResponse = await database.CreateContainerIfNotExistsAsync(
-            new ContainerProperties(HistoryContainerName, "/id"),
-            cancellationToken: cancellationToken);
-        var history = historyResponse.Container;
+        var history = await CreateValidatedContainerAsync(
+            database, HistoryContainerName, cancellationToken);
 
-        await database.CreateContainerIfNotExistsAsync(
-            new ContainerProperties(LockContainerName, "/id"),
-            cancellationToken: cancellationToken);
+        // The lease store is constructed from this database during host setup. Validate
+        // the bootstrap response here as well so a malformed lock-container response
+        // cannot let migrations proceed against an unknown container identity/handle.
+        _ = await CreateValidatedContainerAsync(
+            database, LockContainerName, cancellationToken);
 
         var migrationDatabase = new CosmosMigrationDatabase(database);
         var lease = await leaseCoordinator.AcquireAsync(cancellationToken);
@@ -36,6 +49,7 @@ public sealed class CosmosMigrationRunner(
 
         try
         {
+            migrationCancellation.Token.ThrowIfCancellationRequested();
             foreach (var migration in migrations.OrderBy(x => x.Id, StringComparer.Ordinal))
             {
                 var migrationToken = migrationCancellation.Token;
@@ -65,9 +79,11 @@ public sealed class CosmosMigrationRunner(
 
                 try
                 {
-                    await history.CreateItemAsync(
-                        historyDocument, new PartitionKey(historyDocument.Id),
-                        cancellationToken: migrationToken);
+                    _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                        () => history.CreateItemAsync(
+                            historyDocument, new PartitionKey(historyDocument.Id),
+                            cancellationToken: migrationToken),
+                        migrationToken);
                 }
                 catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
                 {
@@ -101,17 +117,63 @@ public sealed class CosmosMigrationRunner(
         }
     }
 
+    private static async Task<Container> CreateValidatedContainerAsync(
+        CosmosDatabase database,
+        string containerName,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        const string partitionKeyPath = "/id";
+        var response = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+            () => database.CreateContainerIfNotExistsAsync(
+                new ContainerProperties(containerName, partitionKeyPath),
+                cancellationToken: cancellationToken),
+            cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var properties = CosmosReadResponseGuard.ReadResponseResource(
+            response,
+            static containerResponse => containerResponse.Resource,
+            value => string.Equals(value.Id, containerName, StringComparison.Ordinal) &&
+                string.Equals(value.PartitionKeyPath, partitionKeyPath, StringComparison.Ordinal),
+            "migration container",
+            cancellationToken,
+            "Cosmos returned a migration container resource that does not match the requested name and partition-key path after bootstrap.",
+            "Cosmos returned an empty migration container resource after bootstrap.");
+
+        return CosmosReadResponseGuard.ReadResponseResource(
+            response,
+            static containerResponse => containerResponse.Container,
+            value => string.Equals(value.Id, containerName, StringComparison.Ordinal),
+            "migration container handle",
+            cancellationToken,
+            "Cosmos returned a migration container handle that does not match the requested name after bootstrap.",
+            "Cosmos returned an empty migration container handle after bootstrap.");
+    }
+
     private static async Task<bool> IsAppliedAsync(
         Container history, string migrationId, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            await history.ReadItemAsync<MigrationHistoryDocument>(
-                migrationId, new PartitionKey(migrationId), cancellationToken: cancellationToken);
+            var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => history.ReadItemAsync<MigrationHistoryDocument>(
+                    migrationId, new PartitionKey(migrationId), cancellationToken: cancellationToken),
+                cancellationToken);
+            _ = CosmosReadResponseGuard.ReadResource(
+                response,
+                marker => string.Equals(marker.Id, migrationId, StringComparison.Ordinal),
+                "migration history marker",
+                cancellationToken,
+                "Cosmos returned a migration history marker that does not match the requested ID.",
+                "Cosmos returned a migration history marker that does not match the requested ID.");
+
             return true;
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return false;
         }
     }

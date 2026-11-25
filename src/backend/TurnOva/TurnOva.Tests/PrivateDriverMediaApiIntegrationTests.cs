@@ -30,7 +30,7 @@ public sealed partial class RideApiIntegrationTests
         var reference = body.RootElement.GetProperty("storageReference").GetString();
         Assert.NotNull(reference);
         var mediaReference = reference!;
-        Assert.True(mediaReference.StartsWith("drvmedia_", StringComparison.Ordinal));
+        Assert.StartsWith("drvmedia_", mediaReference, StringComparison.Ordinal);
         Assert.False(mediaReference.Contains("private-media-owner", StringComparison.Ordinal));
         Assert.Equal("Clean", body.RootElement.GetProperty("scanStatus").GetString());
 
@@ -104,7 +104,7 @@ public sealed partial class RideApiIntegrationTests
         Assert.Null(saved.ProfilePhotoBase64);
         Assert.Equal(ownerSelfie, saved.ProfilePhotoStorageReference);
         Assert.All(saved.Documents, document =>
-            Assert.True(document.StorageReference.StartsWith("drvmedia_", StringComparison.Ordinal)));
+            Assert.StartsWith("drvmedia_", document.StorageReference, StringComparison.Ordinal));
 
         var ownProfile = await owner.GetFromJsonAsync<DriverOnboardingProfile>("/api/v1/driver/onboarding/me");
         Assert.NotNull(ownProfile);
@@ -226,4 +226,50 @@ public sealed partial class RideApiIntegrationTests
             "/api/v1/union/drivers/private-media-noncab-driver/documents/DrivingLicence");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
+
+    [Theory]
+    [InlineData("Rider")]
+    [InlineData("Driver")]
+    [InlineData("Ops")]
+    public async Task NonUnionManagerRoleCannotAccessUnionOversightEvenWithMatchingUnionClaim(string role)
+    {
+        const string driverId = "union-oversight-role-boundary-driver";
+        const string unionId = "union-oversight-role-boundary-union";
+
+        using var factory = new TurnOvaApiFactory();
+        using var driverProfile = factory.CreateClient("Driver", driverId, unionId);
+        using var nonManager = factory.CreateClient(role, driverId, unionId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var assignments = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
+        var auditEvents = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+        var initialProfile = profiles[driverId];
+        var initialAssignment = assignments[driverId];
+        var initialAuditCount = auditEvents.Count;
+
+        using var members = await nonManager.GetAsync("/api/v1/union/drivers");
+        using var reconciliation = await nonManager.GetAsync("/api/v1/union/reconciliation");
+        using var document = await nonManager.GetAsync(
+            $"/api/v1/union/drivers/{driverId}/documents/DrivingLicence");
+        using var selfieReviewRequest = new HttpRequestMessage(
+            HttpMethod.Put, $"/api/v1/union/drivers/{driverId}/selfie-review")
+        {
+            Content = JsonContent.Create(new { status = "Approved", reason = (string?)null })
+        };
+        using var selfieReview = await nonManager.SendAsync(selfieReviewRequest);
+
+        foreach (var response in new[] { members, reconciliation, document, selfieReview })
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            Assert.True(response.Headers.CacheControl?.NoStore);
+            Assert.Contains(response.Headers.Pragma, value =>
+                value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        }
+
+        Assert.Equal(initialProfile, profiles[driverId]);
+        Assert.Equal(initialAssignment, assignments[driverId]);
+        Assert.Equal(initialAuditCount, auditEvents.Count);
+    }
+
 }

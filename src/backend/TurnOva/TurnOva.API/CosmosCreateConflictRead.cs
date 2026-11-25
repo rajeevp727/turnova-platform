@@ -1,5 +1,6 @@
 using System.Net;
 using Microsoft.Azure.Cosmos;
+using TurnOva.Infrastructure.Database;
 
 namespace TurnOva.API;
 
@@ -18,9 +19,12 @@ public static class CosmosCreateConflictRead
 
         try
         {
-            var response = await container.ReadItemAsync<T>(
-                id, partitionKey, cancellationToken: cancellationToken);
-            return response.Resource;
+            var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => container.ReadItemAsync<T>(
+                    id, partitionKey, cancellationToken: cancellationToken),
+                cancellationToken);
+            return CosmosReadResponseGuard.ReadResponseValue(
+                response, static itemResponse => itemResponse.Resource, cancellationToken);
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {

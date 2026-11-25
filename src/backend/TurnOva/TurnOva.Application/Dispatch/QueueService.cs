@@ -10,9 +10,8 @@ public sealed class QueueService(IQueueStore store)
 
     public async Task JoinAsync(DriverQueueEntry entry, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(entry.DriverId) || string.IsNullOrWhiteSpace(entry.ZoneId) ||
-            string.IsNullOrWhiteSpace(entry.ServiceClass))
-            throw new ArgumentException("Driver, zone and service class are required.");
+        cancellationToken.ThrowIfCancellationRequested();
+        DriverQueueEntry.ValidateForJoin(entry);
 
         await store.AddAsync(entry, cancellationToken);
     }
@@ -20,6 +19,7 @@ public sealed class QueueService(IQueueStore store)
     public Task<bool> MoveToBackAsync(
         string driverId, string zoneId, string serviceClass, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(driverId) || string.IsNullOrWhiteSpace(zoneId) ||
             string.IsNullOrWhiteSpace(serviceClass))
             throw new ArgumentException("Driver, zone and service class are required.");
@@ -30,6 +30,7 @@ public sealed class QueueService(IQueueStore store)
     public Task<bool> LeaveAsync(
         string driverId, string zoneId, string serviceClass, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(driverId) || string.IsNullOrWhiteSpace(zoneId) ||
             string.IsNullOrWhiteSpace(serviceClass))
             throw new ArgumentException("Driver, zone and service class are required.");
@@ -45,19 +46,8 @@ public sealed class QueueService(IQueueStore store)
         string reasonCategory,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(actorId) || string.IsNullOrWhiteSpace(zoneId) ||
-            string.IsNullOrWhiteSpace(serviceClass) || string.IsNullOrWhiteSpace(traceId) ||
-            traceId.Length > 128 ||
-            traceId.Any(character => !char.IsAsciiLetterOrDigit(character) && character is not ':' and not '-' and not '_'))
-            throw new ArgumentException("A valid actor, queue scope and server trace identifier are required.");
-
-        if (!string.Equals(serviceClass, "cab", StringComparison.OrdinalIgnoreCase))
-            throw new ArgumentException("Dispatch exception auditing is limited to the Cab MVP.");
-
-        if (reasonCategory is not QueueAuditReasonCategories.QueueReadFailed and
-            not QueueAuditReasonCategories.DriverReservationFailed and
-            not QueueAuditReasonCategories.DriverReservationPromotionRecovered)
-            throw new ArgumentException("The dispatch exception category is not allow-listed.");
+        cancellationToken.ThrowIfCancellationRequested();
+        DispatchExceptionAuditInput.Validate(actorId, zoneId, serviceClass, traceId, reasonCategory);
 
         return store.RecordDispatchExceptionAsync(
             actorId, zoneId, serviceClass, traceId, reasonCategory, cancellationToken);

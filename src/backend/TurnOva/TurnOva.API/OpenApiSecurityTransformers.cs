@@ -26,7 +26,7 @@ public sealed class TurnOvaOpenApiDocumentTransformer : IOpenApiDocumentTransfor
                 Type = SecuritySchemeType.Http,
                 Scheme = "bearer",
                 BearerFormat = "JWT",
-                Description = "TriSend-issued TurnOva access token."
+                Description = "TurnOva-issued JWT access token."
             },
             ["OpsAdminKey"] = new OpenApiSecurityScheme
             {
@@ -49,7 +49,7 @@ public sealed class TurnOvaOpenApiOperationTransformer : IOpenApiOperationTransf
         CancellationToken cancellationToken)
     {
         var metadata = context.Description.ActionDescriptor.EndpointMetadata;
-        if (metadata.OfType<AllowAnonymousAttribute>().Any())
+        if (metadata.OfType<IAllowAnonymous>().Any())
             return Task.CompletedTask;
 
         var path = (context.Description.RelativePath ?? string.Empty).TrimStart('/');

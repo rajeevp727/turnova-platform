@@ -6,6 +6,83 @@ namespace TurnOva.Tests;
 public sealed class AiAssistanceServiceTests
 {
     [Fact]
+    public async Task DisabledProviderIsNeverInvokedForTripIntentOrHelp()
+    {
+        var providerCalls = 0;
+        var provider = new FakeProvider
+        {
+            TripHandler = (_, _) =>
+            {
+                providerCalls++;
+                return Task.FromResult<TripIntentProviderResult?>(
+                    new TripIntentProviderResult("[PICKUP]", "[DROPOFF]", "Cab"));
+            },
+            HelpHandler = (_, _) =>
+            {
+                providerCalls++;
+                return Task.FromResult<HelpProviderResult?>(new HelpProviderResult("fare-negotiation"));
+            }
+        };
+        var service = CreateService(provider);
+
+        var trip = await service.DraftTripIntentAsync(
+            "Cab from Nizampet to HITEC City for 2 passengers",
+            CancellationToken.None);
+        var help = await service.ExplainHelpAsync(
+            "How is the fare negotiated?",
+            null,
+            CancellationToken.None);
+
+        Assert.Equal("deterministic-fallback", trip.Source);
+        Assert.Equal("deterministic-fallback", help.Source);
+        Assert.Equal("fare-negotiation", help.SourceId);
+        Assert.Equal(0, providerCalls);
+    }
+
+    [Fact]
+    public async Task ProviderAvailabilityProbeFailureUsesDeterministicFallbackForTripIntentAndHelp()
+    {
+        var availabilityProbeCalls = 0;
+        var providerOperationCalls = 0;
+        var provider = new FakeProvider
+        {
+            Availability = () =>
+            {
+                availabilityProbeCalls++;
+                throw new InvalidOperationException("sensitive provider configuration detail");
+            },
+            TripHandler = (_, _) =>
+            {
+                providerOperationCalls++;
+                return Task.FromResult<TripIntentProviderResult?>(
+                    new TripIntentProviderResult("[PICKUP]", "[DROPOFF]", "Cab"));
+            },
+            HelpHandler = (_, _) =>
+            {
+                providerOperationCalls++;
+                return Task.FromResult<HelpProviderResult?>(new HelpProviderResult("fare-negotiation"));
+            }
+        };
+        var service = CreateService(provider, enabled: true);
+
+        var trip = await service.DraftTripIntentAsync(
+            "Cab from Nizampet to HITEC City for 2 passengers",
+            CancellationToken.None);
+        var help = await service.ExplainHelpAsync(
+            "How is the fare negotiated?",
+            null,
+            CancellationToken.None);
+
+        Assert.Equal("deterministic-fallback", trip.Source);
+        Assert.Equal("Nizampet", trip.Pickup);
+        Assert.Equal("HITEC City", trip.Dropoff);
+        Assert.Equal("deterministic-fallback", help.Source);
+        Assert.Equal("fare-negotiation", help.SourceId);
+        Assert.Equal(2, availabilityProbeCalls);
+        Assert.Equal(0, providerOperationCalls);
+    }
+
+    [Fact]
     public async Task TripIntentBuildsCabDraftAndRequiresRiderReviewWhenProviderIsUnavailable()
     {
         var service = CreateService(new UnavailableAiAssistantProvider());
@@ -33,8 +110,17 @@ public sealed class AiAssistanceServiceTests
             Assert.Equal("[DROPOFF]", prompt.DropoffToken);
             Assert.DoesNotContain("12 Main Road", prompt.IntentSummary);
             Assert.DoesNotContain("HITEC City", prompt.IntentSummary);
+            Assert.DoesNotContain("Secret Clinic", prompt.IntentSummary);
+            Assert.DoesNotContain("rider-123", prompt.IntentSummary);
             Assert.DoesNotContain("raja@example.com", prompt.IntentSummary);
             Assert.DoesNotContain("+91", prompt.IntentSummary);
+            Assert.DoesNotContain("17.3850", prompt.IntentSummary);
+            Assert.DoesNotContain("78.4867", prompt.IntentSummary);
+            Assert.DoesNotContain("DL-123456789", prompt.IntentSummary);
+            Assert.DoesNotContain("ABCDE1234F", prompt.IntentSummary);
+            Assert.DoesNotContain("123456789012", prompt.IntentSummary);
+            Assert.DoesNotContain("pay_test_123", prompt.IntentSummary);
+            Assert.DoesNotContain("eyJhbGciOiJIUzI1NiJ9", prompt.IntentSummary);
             Assert.DoesNotContain("family", prompt.IntentSummary, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("child", prompt.IntentSummary, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("wheelchair", prompt.IntentSummary, StringComparison.OrdinalIgnoreCase);
@@ -48,11 +134,11 @@ public sealed class AiAssistanceServiceTests
         var service = CreateService(provider, enabled: true);
 
         var result = await service.DraftTripIntentAsync(
-            "Please book a Cab for my family of 4 with a child and wheelchair accessible service, raja@example.com +91 9876543210, from 12 Main Road to HITEC City",
+            "Please book a Cab for my family of 4 with a child and wheelchair accessible service, rider id rider-123, raja@example.com +91 9876543210, coordinates 17.3850,78.4867, licence DL-123456789, PAN ABCDE1234F, bank account 123456789012, payment token pay_test_123, bearer eyJhbGciOiJIUzI1NiJ9, from 12 Main Road to Secret Clinic",
             CancellationToken.None);
 
         Assert.Equal("12 Main Road", result.Pickup);
-        Assert.Equal("HITEC City", result.Dropoff);
+        Assert.Equal("Secret Clinic", result.Dropoff);
         Assert.Equal(4, result.PassengerCount);
         Assert.Equal("provider", result.Source);
     }
@@ -119,6 +205,27 @@ public sealed class AiAssistanceServiceTests
         Assert.True(result.NeedsClarification);
         Assert.Contains("passengerCount", result.MissingFields);
         Assert.True(result.RequiresUserConfirmation);
+    }
+
+    [Fact]
+    public async Task NullProviderTasksUseDeterministicFallbackForTripIntentAndHelp()
+    {
+        var service = CreateService(new NullTaskProvider(), enabled: true);
+
+        var trip = await service.DraftTripIntentAsync(
+            "Cab from Nizampet to HITEC City for 2 passengers",
+            CancellationToken.None);
+        var help = await service.ExplainHelpAsync(
+            "How is the fare negotiated?",
+            null,
+            CancellationToken.None);
+
+        Assert.Equal("Nizampet", trip.Pickup);
+        Assert.Equal("HITEC City", trip.Dropoff);
+        Assert.Equal("deterministic-fallback", trip.Source);
+        Assert.Equal("fare-negotiation", help.SourceId);
+        Assert.Equal("deterministic-fallback", help.Source);
+        Assert.False(help.EscalationRequired);
     }
 
     [Fact]
@@ -406,7 +513,8 @@ public sealed class AiAssistanceServiceTests
 
         Assert.Equal("unsupported", result.SourceId);
         Assert.True(result.EscalationRequired);
-        Assert.Contains("support contact", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("support-team escalation", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("contact", result.Answer, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -431,7 +539,8 @@ public sealed class AiAssistanceServiceTests
         Assert.Equal("unsupported", result.SourceId);
         Assert.True(result.EscalationRequired);
         Assert.Equal("deterministic-fallback", result.Source);
-        Assert.Contains("support contact", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("support-team escalation", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("contact", result.Answer, StringComparison.OrdinalIgnoreCase);
         Assert.InRange(result.Answer.Length, 1, 100);
     }
 
@@ -500,7 +609,7 @@ public sealed class AiAssistanceServiceTests
     }
 
     [Fact]
-    public async Task QueueHelpExplainsRiderSelectionWithoutInventingInternalFifoPolicy()
+    public async Task QueueHelpExplainsRiderSelectionWithoutExposingInternalQueuePolicy()
     {
         var service = CreateService(new UnavailableAiAssistantProvider());
 
@@ -510,8 +619,12 @@ public sealed class AiAssistanceServiceTests
             CancellationToken.None);
 
         Assert.Equal("queue-status", result.SourceId);
-        Assert.Contains("does not use FIFO", result.Answer, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("unresolved", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not show a queue position", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("automatically assign", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("pickup proximity", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("FIFO", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("unresolved", result.Answer, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("internal", result.Answer, StringComparison.OrdinalIgnoreCase);
         Assert.False(result.EscalationRequired);
     }
 
@@ -645,6 +758,79 @@ public sealed class AiAssistanceServiceTests
         Assert.NotEqual("made-up-policy", result.SourceId);
     }
 
+    [Fact]
+    public async Task HelpProviderTimeoutUsesApprovedContentFallback()
+    {
+        var providerStarted = new TaskCompletionSource<CancellationToken>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var provider = new FakeProvider
+        {
+            HelpHandler = async (_, cancellationToken) =>
+            {
+                providerStarted.TrySetResult(cancellationToken);
+                await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+                return new HelpProviderResult("fare-negotiation");
+            }
+        };
+        var service = CreateService(provider, enabled: true, timeoutSeconds: 1);
+
+        var operation = service.ExplainHelpAsync(
+            "How is the fare negotiated?",
+            null,
+            CancellationToken.None);
+        var providerToken = await providerStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var result = await operation.WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.True(providerToken.IsCancellationRequested);
+        Assert.Equal("fare-negotiation", result.SourceId);
+        Assert.Equal("deterministic-fallback", result.Source);
+        Assert.False(result.EscalationRequired);
+    }
+
+    [Fact]
+    public async Task HelpCallerCancellationDuringProviderRequestIsPropagated()
+    {
+        var providerStarted = new TaskCompletionSource<CancellationToken>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var pendingProvider = new TaskCompletionSource<HelpProviderResult?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var provider = new FakeProvider
+        {
+            HelpHandler = (_, token) =>
+            {
+                providerStarted.TrySetResult(token);
+                return pendingProvider.Task;
+            }
+        };
+        var service = CreateService(provider, enabled: true, timeoutSeconds: 10);
+        using var callerCancellation = new CancellationTokenSource();
+
+        var operation = service.ExplainHelpAsync(
+            "How is the fare negotiated?",
+            null,
+            callerCancellation.Token);
+        var providerToken = await providerStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        await callerCancellation.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation);
+        Assert.True(providerToken.IsCancellationRequested);
+        pendingProvider.TrySetResult(null);
+    }
+
+    private sealed class NullTaskProvider : IAiAssistantProvider
+    {
+        public bool IsAvailable => true;
+
+        public Task<TripIntentProviderResult?> DraftTripIntentAsync(
+            SafeTripIntentPrompt request,
+            CancellationToken cancellationToken) => null!;
+
+        public Task<HelpProviderResult?> ClassifyHelpAsync(
+            SafeHelpPrompt request,
+            CancellationToken cancellationToken) => null!;
+    }
+
     private static AiAssistanceService CreateService(
         IAiAssistantProvider provider,
         bool enabled = false,
@@ -665,7 +851,8 @@ public sealed class AiAssistanceServiceTests
 
     private sealed class FakeProvider : IAiAssistantProvider
     {
-        public bool IsAvailable => true;
+        public Func<bool>? Availability { get; init; }
+        public bool IsAvailable => Availability?.Invoke() ?? true;
 
         public Func<SafeTripIntentPrompt, CancellationToken, Task<TripIntentProviderResult?>>? TripHandler { get; set; }
         public Func<SafeHelpPrompt, CancellationToken, Task<HelpProviderResult?>>? HelpHandler { get; init; }

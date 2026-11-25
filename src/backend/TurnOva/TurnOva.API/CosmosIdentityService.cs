@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Azure.Cosmos;
 using Microsoft.IdentityModel.Tokens;
+using TurnOva.Infrastructure.Database;
 
 namespace TurnOva.API;
 
@@ -11,17 +12,19 @@ public sealed record CosmosRegisterRequest(string Email, string Password, string
 public sealed record CosmosLoginRequest(string Email, string Password);
 public sealed record CosmosRefreshRequest(string? RefreshToken);
 
-public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, IConfiguration? configuration = null)
+public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, IConfiguration? configuration = null, Container? identityContainer = null)
 {
     private const string DatabaseNameDefault = "TurnOvaDb";
     private const string ContainerName = "TurnOvaUsers";
     private const int AccessTokenMinutes = 30;
     private const int RefreshTokenDays = 30;
     private const int Pbkdf2Iterations = 210_000;
-    private Container? _container;
+    private const int PasswordSaltBytes = 16;
+    private const int PasswordHashBytes = 32;
+    private Container? _container = identityContainer;
     private readonly SemaphoreSlim _containerLock = new(1, 1);
 
-    private sealed record IdentityDocument
+    internal sealed record IdentityDocument
     {
         public required string Id { get; init; }
         public required string Role { get; init; }
@@ -35,7 +38,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
         public string DocumentType { get; init; } = "user";
     }
 
-    private sealed record EmailReservation
+    internal sealed record EmailReservation
     {
         public required string Id { get; init; }
         public required string Role { get; init; }
@@ -45,6 +48,8 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
 
     public async Task<IResult> RegisterAsync(string role, CosmosRegisterRequest request, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(request);
         var normalizedRole = NormalizeRole(role);
         if (normalizedRole is null) return Results.NotFound();
         var email = NormalizeEmail(request.Email);
@@ -60,26 +65,15 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
         var container = await GetContainerAsync(ct);
         if (container is null) return StorageUnavailable();
 
-        var salt = RandomNumberGenerator.GetBytes(16);
-        var hash = Rfc2898DeriveBytes.Pbkdf2(request.Password, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, 32);
+        ct.ThrowIfCancellationRequested();
+        var salt = RandomNumberGenerator.GetBytes(PasswordSaltBytes);
+        var hash = Rfc2898DeriveBytes.Pbkdf2(request.Password, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, PasswordHashBytes);
+        ct.ThrowIfCancellationRequested();
         var userId = Guid.NewGuid().ToString("N");
         var reservation = new EmailReservation
         {
             Id = $"email:{email}", Role = normalizedRole, Email = email
         };
-        try
-        {
-            await container.CreateItemAsync(reservation, new PartitionKey(normalizedRole), cancellationToken: ct);
-        }
-        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
-        {
-            return Results.Conflict(new { message = "An account with this email already exists for this app." });
-        }
-        catch (CosmosException)
-        {
-            return StorageUnavailable();
-        }
-
         var refreshToken = CreateRefreshToken();
         var user = new IdentityDocument
         {
@@ -93,14 +87,32 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
             RefreshTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(RefreshTokenDays),
             CreatedAtUtc = DateTimeOffset.UtcNow
         };
+
         try
         {
-            await container.CreateItemAsync(user, new PartitionKey(normalizedRole), cancellationToken: ct);
+            var batch = container.CreateTransactionalBatch(new PartitionKey(normalizedRole));
+            batch.CreateItem(reservation);
+            batch.CreateItem(user);
+            ct.ThrowIfCancellationRequested();
+            using var response = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => batch.ExecuteAsync(ct),
+                ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                ct.ThrowIfCancellationRequested();
+                return response.StatusCode == System.Net.HttpStatusCode.Conflict
+                    ? Results.Conflict(new { message = "An account with this email already exists for this app." })
+                    : StorageUnavailable();
+            }
         }
-        catch
+        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
         {
-            try { await container.DeleteItemAsync<EmailReservation>(reservation.Id, new PartitionKey(normalizedRole), cancellationToken: ct); }
-            catch { /* Reservation cleanup is best-effort; never expose credentials in an error. */ }
+            ct.ThrowIfCancellationRequested();
+            return Results.Conflict(new { message = "An account with this email already exists for this app." });
+        }
+        catch (CosmosException)
+        {
+            ct.ThrowIfCancellationRequested();
             return StorageUnavailable();
         }
 
@@ -109,6 +121,8 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
 
     public async Task<IResult> LoginAsync(string role, CosmosLoginRequest request, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(request);
         var normalizedRole = NormalizeRole(role);
         if (normalizedRole is null) return Results.NotFound();
         var email = NormalizeEmail(request.Email);
@@ -117,88 +131,287 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
 
         var container = await GetContainerAsync(ct);
         if (container is null) return StorageUnavailable();
-        IdentityDocument? user;
+        ct.ThrowIfCancellationRequested();
+
+        IdentityDocument? candidate;
         try
         {
-            // Email lookup is scoped to the role partition and only returns account documents.
             var query = new QueryDefinition("SELECT * FROM c WHERE c.email = @email AND c.documentType = 'user'")
                 .WithParameter("@email", email);
-            using var iterator = container.GetItemQueryIterator<IdentityDocument>(query, requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(normalizedRole), MaxItemCount = 1 });
-            user = null;
-            while (iterator.HasMoreResults && user is null)
+            using var iterator = container.GetItemQueryIterator<IdentityDocument>(
+                query,
+                requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(normalizedRole), MaxItemCount = 1 });
+            candidate = null;
+            while (candidate is null && CosmosReadResponseGuard.ReadHasMoreResults(iterator, ct))
             {
-                var page = await iterator.ReadNextAsync(ct);
-                user = page.FirstOrDefault();
+                var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                    () => iterator.ReadNextAsync(ct),
+                    ct);
+                ct.ThrowIfCancellationRequested();
+                candidate = CosmosReadResponseGuard.ReadPageItems(page, ct).FirstOrDefault();
             }
         }
-        catch (CosmosException) { return StorageUnavailable(); }
+        catch (CosmosException)
+        {
+            ct.ThrowIfCancellationRequested();
+            return StorageUnavailable();
+        }
 
-        if (user is null || !VerifyPassword(request.Password, user.PasswordSalt, user.PasswordHash))
-            return Results.Problem("Email or password is incorrect.", statusCode: 401, title: "Invalid credentials.");
+        ct.ThrowIfCancellationRequested();
+        if (candidate is null ||
+            !IsExpectedIdentity(candidate, candidate.Id, normalizedRole) ||
+            !string.Equals(candidate.Email, email, StringComparison.Ordinal))
+            return InvalidCredentials();
+
+        ItemResponse<IdentityDocument> readResponse;
+        try
+        {
+            readResponse = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => container.ReadItemAsync<IdentityDocument>(
+                    candidate.Id, new PartitionKey(normalizedRole), cancellationToken: ct),
+                ct);
+        }
+        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            ct.ThrowIfCancellationRequested();
+            return InvalidCredentials();
+        }
+        catch (CosmosException)
+        {
+            ct.ThrowIfCancellationRequested();
+            return StorageUnavailable();
+        }
+
+        ct.ThrowIfCancellationRequested();
+        var user = CosmosReadResponseGuard.ReadResponseValue(
+            readResponse, static response => response.Resource, ct);
+        if (user is null ||
+            !IsExpectedIdentity(user, candidate.Id, normalizedRole) ||
+            !string.Equals(user.Email, email, StringComparison.Ordinal))
+            return InvalidCredentials();
+
+        var credentialsValid = VerifyPassword(request.Password, user.PasswordSalt, user.PasswordHash);
+        // PBKDF2 is synchronous; honor a disconnect that occurred while verifying the password,
+        // including when the supplied password is incorrect, before returning or rotating a session.
+        ct.ThrowIfCancellationRequested();
+        if (!credentialsValid) return InvalidCredentials();
+        var etag = CosmosReadResponseGuard.ReadResponseEtag(
+            readResponse, static response => response.ETag, ct);
+        if (!HasUsableEtag(etag)) return StorageUnavailable();
 
         var refreshToken = CreateRefreshToken();
         user.RefreshTokenHash = HashRefreshToken(refreshToken);
         user.RefreshTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(RefreshTokenDays);
         try
         {
-            await container.ReplaceItemAsync(user, user.Id, new PartitionKey(normalizedRole), cancellationToken: ct);
+            _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => container.ReplaceItemAsync(
+                    user,
+                    user.Id,
+                    new PartitionKey(normalizedRole),
+                    new ItemRequestOptions { IfMatchEtag = etag },
+                    ct),
+                ct);
         }
-        catch (CosmosException) { return StorageUnavailable(); }
+        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
+        {
+            ct.ThrowIfCancellationRequested();
+            return SessionChanged();
+        }
+        catch (CosmosException)
+        {
+            ct.ThrowIfCancellationRequested();
+            return StorageUnavailable();
+        }
+
         return Results.Ok(CreateSession(user, refreshToken));
     }
 
     public async Task<IResult> RefreshAsync(CosmosRefreshRequest? request, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(request?.RefreshToken))
             return Results.BadRequest(new { message = "Refresh token is required." });
         var container = await GetContainerAsync(ct);
         if (container is null) return StorageUnavailable();
+        ct.ThrowIfCancellationRequested();
+
         var tokenHash = HashRefreshToken(request.RefreshToken);
         foreach (var role in new[] { "Rider", "Driver" })
         {
+            ct.ThrowIfCancellationRequested();
             try
             {
                 var query = new QueryDefinition("SELECT * FROM c WHERE c.refreshTokenHash = @hash AND c.documentType = 'user'")
                     .WithParameter("@hash", tokenHash);
-                using var iterator = container.GetItemQueryIterator<IdentityDocument>(query, requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(role), MaxItemCount = 1 });
-                while (iterator.HasMoreResults)
+                using var iterator = container.GetItemQueryIterator<IdentityDocument>(
+                    query,
+                    requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(role), MaxItemCount = 1 });
+                while (CosmosReadResponseGuard.ReadHasMoreResults(iterator, ct))
                 {
-                    var page = await iterator.ReadNextAsync(ct);
-                    var user = page.FirstOrDefault();
-                    if (user is null) continue;
-                    if (user.RefreshTokenExpiresAtUtc is null || user.RefreshTokenExpiresAtUtc <= DateTimeOffset.UtcNow)
+                    var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                        () => iterator.ReadNextAsync(ct),
+                        ct);
+                    ct.ThrowIfCancellationRequested();
+                    var candidate = CosmosReadResponseGuard.ReadPageItems(page, ct).FirstOrDefault();
+                    if (candidate is null) continue;
+                    if (!IsExpectedIdentity(candidate, candidate.Id, role))
+                    {
+                        ct.ThrowIfCancellationRequested();
                         return InvalidRefreshToken();
+                    }
+
+                    ItemResponse<IdentityDocument> readResponse;
+                    try
+                    {
+                        readResponse = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                            () => container.ReadItemAsync<IdentityDocument>(
+                                candidate.Id, new PartitionKey(role), cancellationToken: ct),
+                            ct);
+                    }
+                    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        return InvalidRefreshToken();
+                    }
+                    catch (CosmosException)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        return StorageUnavailable();
+                    }
+
+                    ct.ThrowIfCancellationRequested();
+                    var user = CosmosReadResponseGuard.ReadResponseValue(
+                        readResponse, static response => response.Resource, ct);
+                    if (user is null ||
+                        !IsExpectedIdentity(user, candidate.Id, role) ||
+                        !HasCanonicalEmail(user.Email) ||
+                        !FixedTimeEquals(user.RefreshTokenHash, tokenHash) ||
+                        user.RefreshTokenExpiresAtUtc is null ||
+                        user.RefreshTokenExpiresAtUtc.GetValueOrDefault() <= DateTimeOffset.UtcNow)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        return InvalidRefreshToken();
+                    }
+                    var etag = CosmosReadResponseGuard.ReadResponseEtag(
+                        readResponse, static response => response.ETag, ct);
+                    if (!HasUsableEtag(etag)) return StorageUnavailable();
+
                     var nextRefresh = CreateRefreshToken();
                     user.RefreshTokenHash = HashRefreshToken(nextRefresh);
                     user.RefreshTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(RefreshTokenDays);
-                    await container.ReplaceItemAsync(user, user.Id, new PartitionKey(role), cancellationToken: ct);
+                    ct.ThrowIfCancellationRequested();
+                    try
+                    {
+                        _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                            () => container.ReplaceItemAsync(
+                                user,
+                                user.Id,
+                                new PartitionKey(role),
+                                new ItemRequestOptions { IfMatchEtag = etag },
+                                ct),
+                            ct);
+                    }
+                    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        return InvalidRefreshToken();
+                    }
+                    catch (CosmosException)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        return StorageUnavailable();
+                    }
+
                     return Results.Ok(CreateSession(user, nextRefresh));
                 }
             }
-            catch (CosmosException) { return StorageUnavailable(); }
+            catch (CosmosException)
+            {
+                ct.ThrowIfCancellationRequested();
+                return StorageUnavailable();
+            }
         }
+
+        ct.ThrowIfCancellationRequested();
         return InvalidRefreshToken();
     }
 
     public async Task<IResult> LogoutAsync(ClaimsPrincipal principal, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(principal);
         var userId = principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
         var role = NormalizeRole(principal.FindFirstValue("role"));
         if (string.IsNullOrWhiteSpace(userId) || role is null) return Results.Unauthorized();
         var container = await GetContainerAsync(ct);
         if (container is null) return StorageUnavailable();
-        try
+        ct.ThrowIfCancellationRequested();
+
+        var id = $"user:{userId}";
+        var partitionKey = new PartitionKey(role);
+        for (var attempt = 0; attempt < 3; attempt++)
         {
-            var id = $"user:{userId}";
-            var response = await container.ReadItemAsync<IdentityDocument>(id, new PartitionKey(role), cancellationToken: ct);
-            var user = response.Resource;
+            ct.ThrowIfCancellationRequested();
+            ItemResponse<IdentityDocument> readResponse;
+            try
+            {
+                readResponse = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                    () => container.ReadItemAsync<IdentityDocument>(
+                        id, partitionKey, cancellationToken: ct),
+                    ct);
+            }
+            catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                ct.ThrowIfCancellationRequested();
+                return Results.NoContent();
+            }
+            catch (CosmosException)
+            {
+                ct.ThrowIfCancellationRequested();
+                return StorageUnavailable();
+            }
+
+            ct.ThrowIfCancellationRequested();
+            var user = CosmosReadResponseGuard.ReadResponseValue(
+                readResponse, static response => response.Resource, ct);
+            if (user is null || !IsExpectedIdentity(user, id, role)) return StorageUnavailable();
+            if (string.IsNullOrWhiteSpace(user.RefreshTokenHash) && user.RefreshTokenExpiresAtUtc is null)
+                return Results.NoContent();
+            var etag = CosmosReadResponseGuard.ReadResponseEtag(
+                readResponse, static response => response.ETag, ct);
+            if (!HasUsableEtag(etag)) return StorageUnavailable();
+
             user.RefreshTokenHash = null;
             user.RefreshTokenExpiresAtUtc = null;
-            await container.ReplaceItemAsync(user, id, new PartitionKey(role), cancellationToken: ct);
-            return Results.NoContent();
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                    () => container.ReplaceItemAsync(
+                        user,
+                        id,
+                        partitionKey,
+                        new ItemRequestOptions { IfMatchEtag = etag },
+                        ct),
+                    ct);
+                return Results.NoContent();
+            }
+            catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
+            {
+                ct.ThrowIfCancellationRequested();
+                // A concurrent login/refresh changed the document. Re-read and revoke the
+                // latest refresh token rather than reporting logout success on a stale write.
+                continue;
+            }
+            catch (CosmosException)
+            {
+                ct.ThrowIfCancellationRequested();
+                return StorageUnavailable();
+            }
         }
-        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return Results.NoContent(); }
-        catch (CosmosException) { return StorageUnavailable(); }
+
+        return SessionChanged();
     }
 
     public static IResult Me(ClaimsPrincipal principal)
@@ -212,20 +425,96 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
         return Results.Ok(new { user = new { id, email, name, role } });
     }
 
+    private static bool IsExpectedIdentity(IdentityDocument? user, string expectedId, string expectedRole) =>
+        user is not null &&
+        !string.IsNullOrWhiteSpace(expectedId) &&
+        expectedId.StartsWith("user:", StringComparison.Ordinal) &&
+        expectedId.Length > "user:".Length &&
+        !string.IsNullOrWhiteSpace(expectedId["user:".Length..]) &&
+        string.Equals(user.Id, expectedId, StringComparison.Ordinal) &&
+        string.Equals(user.Role, expectedRole, StringComparison.Ordinal) &&
+        string.Equals(user.DocumentType, "user", StringComparison.Ordinal) &&
+        !string.IsNullOrWhiteSpace(user.Email);
+
+    private static bool HasCanonicalEmail(string? email)
+    {
+        var normalizedEmail = NormalizeEmail(email);
+        return normalizedEmail is not null &&
+            string.Equals(email, normalizedEmail, StringComparison.Ordinal) &&
+            IsValidEmail(normalizedEmail);
+    }
+
+    private static bool HasUsableEtag(string? etag) => !string.IsNullOrWhiteSpace(etag);
+
+    private static bool FixedTimeEquals(string? storedValue, string expectedValue)
+    {
+        if (string.IsNullOrWhiteSpace(storedValue)) return false;
+        var storedBytes = Encoding.UTF8.GetBytes(storedValue);
+        var expectedBytes = Encoding.UTF8.GetBytes(expectedValue);
+        return storedBytes.Length == expectedBytes.Length &&
+            CryptographicOperations.FixedTimeEquals(storedBytes, expectedBytes);
+    }
+
+    private static IResult InvalidCredentials() =>
+        Results.Problem("Email or password is incorrect.", statusCode: 401, title: "Invalid credentials.");
+
+    private static IResult SessionChanged() =>
+        Results.Conflict(new { message = "The account changed while the request was being processed. Please retry." });
+
     private async Task<Container?> GetContainerAsync(CancellationToken ct)
     {
-        if (cosmosClient is null) return null;
         if (_container is not null) return _container;
+        if (cosmosClient is null) return null;
         await _containerLock.WaitAsync(ct);
         try
         {
             if (_container is not null) return _container;
-            var database = cosmosClient!.GetDatabase(configuration?["CosmosDb:DatabaseName"] ?? DatabaseNameDefault);
-            await database.CreateContainerIfNotExistsAsync(new ContainerProperties(ContainerName, "/role"), cancellationToken: ct);
-            _container = database.GetContainer(ContainerName);
+            var databaseName = configuration?["CosmosDb:DatabaseName"] ?? DatabaseNameDefault;
+            if (string.IsNullOrWhiteSpace(databaseName))
+                throw new InvalidOperationException("Cosmos database name must be configured.");
+
+            var database = cosmosClient!.GetDatabase(databaseName);
+            var returnedDatabaseName = CosmosReadResponseGuard.ReadResponseValue(
+                database,
+                static databaseHandle => databaseHandle.Id,
+                ct);
+            if (!string.Equals(returnedDatabaseName, databaseName, StringComparison.Ordinal))
+                throw new InvalidOperationException("Cosmos returned a database handle that does not match the configured database name.");
+
+            var response = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => database.CreateContainerIfNotExistsAsync(
+                    new ContainerProperties(ContainerName, "/role"),
+                    cancellationToken: ct),
+                ct);
+
+            _ = CosmosReadResponseGuard.ReadResponseResource(
+                response,
+                static containerResponse => containerResponse.Resource,
+                properties =>
+                    string.Equals(properties.Id, ContainerName, StringComparison.Ordinal) &&
+                    string.Equals(properties.PartitionKeyPath, "/role", StringComparison.Ordinal),
+                "identity container metadata",
+                ct,
+                "Cosmos returned an identity container resource that does not match the requested name and partition-key path after bootstrap.",
+                "Cosmos returned an empty identity container resource after bootstrap.");
+
+            _container = CosmosReadResponseGuard.ReadResponseResource(
+                response,
+                static containerResponse => containerResponse.Container,
+                container => string.Equals(container.Id, ContainerName, StringComparison.Ordinal),
+                "identity container handle",
+                ct,
+                "Cosmos returned an identity container handle that does not match the requested name after bootstrap.",
+                "Cosmos returned an empty identity container handle after bootstrap.");
             return _container;
         }
-        catch (CosmosException) { return null; }
+        catch (CosmosException)
+        {
+            // Preserve request cancellation when the SDK surfaces a provider failure
+            // concurrently with an aborted request.
+            ct.ThrowIfCancellationRequested();
+            return null;
+        }
         finally { _containerLock.Release(); }
     }
 
@@ -264,7 +553,8 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
         {
             var salt = Convert.FromBase64String(saltValue);
             var expected = Convert.FromBase64String(hashValue);
-            var actual = Rfc2898DeriveBytes.Pbkdf2(password, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, expected.Length);
+            if (salt.Length != PasswordSaltBytes || expected.Length != PasswordHashBytes) return false;
+            var actual = Rfc2898DeriveBytes.Pbkdf2(password, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, PasswordHashBytes);
             return CryptographicOperations.FixedTimeEquals(actual, expected);
         }
         catch (FormatException) { return false; }

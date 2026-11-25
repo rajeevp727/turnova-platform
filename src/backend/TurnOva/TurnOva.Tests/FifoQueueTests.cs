@@ -1,3 +1,4 @@
+using System.Collections;
 using TurnOva.Domain.Dispatch;
 
 namespace TurnOva.Tests;
@@ -101,6 +102,62 @@ public sealed class FifoQueueTests
         Assert.False(new FifoQueue().Remove("missing"));
     }
 
+    [Fact]
+    public void EnqueueHonorsCancellationBeforeMutation()
+    {
+        var queue = new FifoQueue();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            queue.Enqueue(Entry("driver-a"), cancellation.Token));
+
+        Assert.Empty(queue.Entries);
+    }
+
+    [Fact]
+    public void RemoveHonorsCancellationBeforeMutation()
+    {
+        var queue = new FifoQueue();
+        queue.Enqueue(Entry("driver-a"));
+        queue.Enqueue(Entry("driver-b"));
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            queue.Remove("driver-a", cancellation.Token));
+
+        Assert.Equal(new[] { "driver-a", "driver-b" }, queue.Entries.Select(entry => entry.DriverId));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void EligibleSnapshotHonorsCancellationDuringOrAfterEnumeration(bool yieldSecond)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var first = Entry("driver-a", sequence: 1);
+        var second = yieldSecond ? Entry("driver-b", sequence: 2) : null;
+        var entries = new CancellingEntries(cancellation, first, second);
+
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            FifoQueueSnapshots.GetEligible(entries, cancellation.Token));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void FindEligibleHonorsCancellationDuringOrAfterEnumeration(bool yieldSecond)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var first = Entry("driver-a", sequence: 1);
+        var second = yieldSecond ? Entry("driver-b", sequence: 2) : null;
+        var entries = new CancellingEntries(cancellation, first, second);
+
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            FifoQueueSnapshots.FindEligible(entries, "missing-driver", cancellation.Token));
+    }
+
     private static DriverQueueEntry Entry(
         string driverId,
         string zoneId = "zone-a",
@@ -109,4 +166,20 @@ public sealed class FifoQueueTests
         bool eligible = true,
         DateTimeOffset? joinedAt = null) =>
         new(driverId, zoneId, serviceClass, joinedAt ?? DateTimeOffset.Parse("2026-01-01T10:00:00Z"), sequence, eligible);
+
+    private sealed class CancellingEntries(
+        CancellationTokenSource cancellation,
+        DriverQueueEntry first,
+        DriverQueueEntry? second) : IEnumerable<DriverQueueEntry>
+    {
+        public IEnumerator<DriverQueueEntry> GetEnumerator()
+        {
+            yield return first;
+            cancellation.Cancel();
+            if (second is not null)
+                yield return second;
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    }
 }

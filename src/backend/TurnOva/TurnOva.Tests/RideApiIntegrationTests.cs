@@ -182,9 +182,9 @@ public sealed partial class RideApiIntegrationTests
 
         using var unauthorizedAttempt = await rider.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null);
         Assert.Equal(HttpStatusCode.Forbidden, unauthorizedAttempt.StatusCode);
-        Assert.Empty((await queueStore.GetAuditEventsAsync(
-            "hyderabad-central", "cab", CancellationToken.None))
-            .Where(item => item.EventType == QueueAuditEventTypes.DispatchException));
+        Assert.DoesNotContain(
+            await queueStore.GetAuditEventsAsync("hyderabad-central", "cab", CancellationToken.None),
+            item => item.EventType == QueueAuditEventTypes.DispatchException);
 
         queueStore.FailNextRead();
         using var response = await driver.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null);
@@ -199,8 +199,8 @@ public sealed partial class RideApiIntegrationTests
 
         var auditEvents = await queueStore.GetAuditEventsAsync(
             "hyderabad-central", "cab", CancellationToken.None);
-        var audit = Assert.Single(auditEvents.Where(item =>
-            item.EventType == QueueAuditEventTypes.DispatchException));
+        var audit = Assert.Single(auditEvents, item =>
+            item.EventType == QueueAuditEventTypes.DispatchException);
         Assert.Equal("hyderabad-central|cab", audit.ZoneServiceKey);
         Assert.Equal(driverId, audit.DriverId);
         Assert.Equal(traceId, audit.TraceId);
@@ -500,7 +500,7 @@ public sealed partial class RideApiIntegrationTests
         var updated = profiles["driver-selfie-preserve-latest"];
         Assert.Null(updated.ProfilePhotoBase64);
         Assert.NotNull(updated.ProfilePhotoStorageReference);
-        Assert.True(updated.ProfilePhotoStorageReference.StartsWith("drvmedia_", StringComparison.Ordinal));
+        Assert.StartsWith("drvmedia_", updated.ProfilePhotoStorageReference!, StringComparison.Ordinal);
         var responseProfile = await response.Content.ReadFromJsonAsync<DriverOnboardingProfile>();
         Assert.Equal("/9j/4AAQSkZJRg==", responseProfile?.ProfilePhotoBase64);
         Assert.Equal("Pending", updated.ProfilePhotoApprovalStatus);
@@ -614,6 +614,629 @@ public sealed partial class RideApiIntegrationTests
         var rejoined = await second.GetFromJsonAsync<List<QueueEntryTest>>("/api/v1/zones/hyderabad-central/queues/cab");
         Assert.NotNull(rejoined);
         Assert.Equal(new[] { "availability-second", "availability-first" }, rejoined.Select(x => x.DriverId));
+    }
+
+    [Fact]
+    public async Task RiderCannotReadOrMutateInternalDriverFifoQueue()
+    {
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", "rider-fifo-privacy");
+        using var driver = factory.CreateClient("Driver", "driver-fifo-privacy");
+        var queueService = factory.Services.GetRequiredService<QueueService>();
+        const string queuePath = "/api/v1/zones/hyderabad-central/queues/cab";
+        const string ownQueuePath = queuePath + "/me";
+
+        await queueService.JoinAsync(new DriverQueueEntry(
+            "driver-fifo-privacy", "hyderabad-central", "cab", DateTimeOffset.UtcNow, 0, true));
+
+        using var riderQueueResponse = await rider.GetAsync(queuePath);
+        Assert.Equal(HttpStatusCode.Forbidden, riderQueueResponse.StatusCode);
+
+        using var riderPositionResponse = await rider.GetAsync(ownQueuePath);
+        Assert.Equal(HttpStatusCode.Forbidden, riderPositionResponse.StatusCode);
+
+        using var riderLeaveResponse = await rider.DeleteAsync(ownQueuePath);
+        Assert.Equal(HttpStatusCode.Forbidden, riderLeaveResponse.StatusCode);
+
+        using var riderJoinResponse = await rider.PostAsJsonAsync(
+            "/api/v1/queues/join", new { zoneId = "hyderabad-central", serviceClass = "cab" });
+        Assert.Equal(HttpStatusCode.Forbidden, riderJoinResponse.StatusCode);
+
+        // Denied Rider operations must not mutate or hide the Driver's internal queue state.
+        using var driverQueueResponse = await driver.GetAsync(queuePath);
+        Assert.Equal(HttpStatusCode.OK, driverQueueResponse.StatusCode);
+        var entries = await driverQueueResponse.Content.ReadFromJsonAsync<List<QueueEntryTest>>();
+        var entry = Assert.Single(entries!);
+        Assert.Equal("driver-fifo-privacy", entry.DriverId);
+        Assert.Equal(1, entry.Position);
+
+        using var driverPositionResponse = await driver.GetAsync(ownQueuePath);
+        Assert.Equal(HttpStatusCode.OK, driverPositionResponse.StatusCode);
+        using var positionJson = JsonDocument.Parse(await driverPositionResponse.Content.ReadAsStringAsync());
+        Assert.True(positionJson.RootElement.GetProperty("isQueued").GetBoolean());
+        Assert.Equal(1, positionJson.RootElement.GetProperty("position").GetInt32());
+    }
+
+    [Fact]
+    public async Task RiderCannotTriggerInternalFifoOfferTimeout()
+    {
+        const string riderId = "rider-cannot-timeout";
+        const string driverId = "driver-after-rider-timeout";
+        using var factory = new TurnOvaApiFactory();
+        using var rider = factory.CreateClient("Rider", riderId);
+        // Seed a valid online Driver profile for the same subject so this test proves
+        // the endpoint's role policy, not merely a missing-profile check.
+        using var riderDriverProfile = factory.CreateClient("Driver", riderId);
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, riderId, "rider-timeout-union");
+        SeedBookableDriver(factory, driverId, "driver-timeout-union");
+
+        var queueService = factory.Services.GetRequiredService<QueueService>();
+        await queueService.JoinAsync(new DriverQueueEntry(
+            riderId, "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-2), 0, true));
+        await queueService.JoinAsync(new DriverQueueEntry(
+            driverId, "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-1), 0, true));
+
+        using var denied = await rider.PostAsync(
+            "/api/v1/queues/hyderabad-central/cab/offer-timeout", null);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+
+        // A Rider must not rotate the internal Driver queue, even when its subject
+        // also has an otherwise eligible Driver profile and is at the queue head.
+        using var driverQueue = await driver.GetAsync(
+            "/api/v1/zones/hyderabad-central/queues/cab");
+        Assert.Equal(HttpStatusCode.OK, driverQueue.StatusCode);
+        var entries = await driverQueue.Content.ReadFromJsonAsync<List<QueueEntryTest>>();
+        Assert.NotNull(entries);
+        Assert.Equal(new[] { riderId, driverId }, entries.Select(entry => entry.DriverId));
+        Assert.Equal(new[] { 1, 2 }, entries.Select(entry => entry.Position));
+    }
+
+    [Theory]
+    [InlineData("Ops")]
+    [InlineData("UnionManager")]
+    public async Task NonDriverRolesCannotReadOrMutateInternalDriverFifoQueueForSameDriverSubject(string nonDriverRole)
+    {
+        const string driverId = "non-driver-fifo-boundary";
+        const string secondDriverId = "non-driver-fifo-second";
+        const string unionId = "non-driver-fifo-union";
+        const string adminKey = "integration-test-admin-key-32chars";
+
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", driverId);
+        using var secondDriver = factory.CreateClient("Driver", secondDriverId);
+        using var nonDriver = factory.CreateClient(nonDriverRole, driverId, unionId);
+        if (nonDriverRole == "Ops")
+            nonDriver.DefaultRequestHeaders.Add("X-Driver-Admin-Key", adminKey);
+
+        SeedBookableDriver(factory, driverId, unionId);
+        SeedBookableDriver(factory, secondDriverId, "non-driver-fifo-second-union");
+
+        var queueService = factory.Services.GetRequiredService<QueueService>();
+        var now = DateTimeOffset.UtcNow;
+        await queueService.JoinAsync(new DriverQueueEntry(
+            driverId, "hyderabad-central", "cab", now.AddMinutes(-2), 0, true));
+        await queueService.JoinAsync(new DriverQueueEntry(
+            secondDriverId, "hyderabad-central", "cab", now.AddMinutes(-1), 0, true));
+
+        static void AssertDenied(HttpResponseMessage response)
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            Assert.True(response.Headers.CacheControl?.NoStore);
+            Assert.Contains(response.Headers.Pragma, value =>
+                value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        }
+
+        const string queuePath = "/api/v1/zones/hyderabad-central/queues/cab";
+        const string ownQueuePath = queuePath + "/me";
+
+        using var deniedQueueRead = await nonDriver.GetAsync(queuePath);
+        AssertDenied(deniedQueueRead);
+        using var deniedPositionRead = await nonDriver.GetAsync(ownQueuePath);
+        AssertDenied(deniedPositionRead);
+        using var deniedLeave = await nonDriver.DeleteAsync(ownQueuePath);
+        AssertDenied(deniedLeave);
+        using var deniedJoin = await nonDriver.PostAsJsonAsync(
+            "/api/v1/queues/join",
+            new { zoneId = "hyderabad-central", serviceClass = "cab" });
+        AssertDenied(deniedJoin);
+        using var deniedTimeout = await nonDriver.PostAsync(
+            "/api/v1/queues/hyderabad-central/cab/offer-timeout", content: null);
+        AssertDenied(deniedTimeout);
+
+        // Neither a matching Driver subject, a matching Union claim, nor the separate
+        // Operations admin key grants access to the internal Driver-only FIFO surface.
+        var unchangedQueue = await queueService.GetPositionedQueueAsync(
+            "hyderabad-central", "cab", CancellationToken.None);
+        Assert.Equal(new[] { driverId, secondDriverId }, unchangedQueue.Select(entry => entry.DriverId));
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        Assert.Equal("Online", profiles[driverId].AvailabilityStatus);
+        Assert.Equal(17.493, profiles[driverId].CurrentLatitude);
+        Assert.Equal(78.399, profiles[driverId].CurrentLongitude);
+
+        // Positive controls: the real Driver can inspect its queue position and invoke
+        // the existing compatibility timeout; the denied non-Driver calls did not rotate it.
+        using var driverQueueRead = await driver.GetAsync(queuePath);
+        Assert.Equal(HttpStatusCode.OK, driverQueueRead.StatusCode);
+        var visibleQueue = await driverQueueRead.Content.ReadFromJsonAsync<List<QueueEntryTest>>();
+        Assert.NotNull(visibleQueue);
+        Assert.Equal(new[] { driverId, secondDriverId }, visibleQueue.Select(entry => entry.DriverId));
+
+        using var driverPositionRead = await driver.GetAsync(ownQueuePath);
+        Assert.Equal(HttpStatusCode.OK, driverPositionRead.StatusCode);
+        using (var positionJson = JsonDocument.Parse(await driverPositionRead.Content.ReadAsStringAsync()))
+        {
+            Assert.True(positionJson.RootElement.GetProperty("isQueued").GetBoolean());
+            Assert.Equal(1, positionJson.RootElement.GetProperty("position").GetInt32());
+        }
+
+        using var allowedTimeout = await driver.PostAsync(
+            "/api/v1/queues/hyderabad-central/cab/offer-timeout", content: null);
+        Assert.Equal(HttpStatusCode.OK, allowedTimeout.StatusCode);
+        var queueAfterDriverTimeout = await queueService.GetPositionedQueueAsync(
+            "hyderabad-central", "cab", CancellationToken.None);
+        Assert.Equal(new[] { secondDriverId, driverId }, queueAfterDriverTimeout.Select(entry => entry.DriverId));
+    }
+
+    [Fact]
+    public async Task RiderCannotRejectInternalFifoOffer()
+    {
+        const string riderId = "rider-cannot-reject-fifo";
+        const string rideOwnerId = "ride-owner-for-rider-reject";
+        const string secondDriverId = "driver-after-reject-attempt";
+        var advancer = new RecordingRideOfferAdvancer();
+        using var factory = new TurnOvaApiFactory(rideOfferAdvancer: advancer);
+        using var rider = factory.CreateClient("Rider", riderId);
+        using var riderDriverProfile = factory.CreateClient("Driver", riderId);
+        using var rideOwner = factory.CreateClient("Rider", rideOwnerId);
+        using var secondDriver = factory.CreateClient("Driver", secondDriverId);
+        SeedBookableDriver(factory, riderId, "union-rider-reject");
+        SeedBookableDriver(factory, secondDriverId, "union-second-reject");
+
+        var queueService = factory.Services.GetRequiredService<QueueService>();
+        await queueService.JoinAsync(new DriverQueueEntry(
+            riderId, "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-2), 0, true));
+        await queueService.JoinAsync(new DriverQueueEntry(
+            secondDriverId, "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-1), 0, true));
+        var ride = await CreateRideAsync(rideOwner, "request-rider-cannot-reject-001");
+
+        using var denied = await rider.PostAsync($"/api/v1/rides/{ride.RideId}/reject", null);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+
+        var queue = await factory.Services.GetRequiredService<IQueueStore>()
+            .GetEligibleAsync("hyderabad-central", "cab", CancellationToken.None);
+        Assert.Equal(new[] { riderId, secondDriverId }, queue.Select(entry => entry.DriverId));
+
+        var offer = await factory.Services.GetRequiredService<IRideOfferStore>()
+            .GetByRideAsync(ride.RideId, CancellationToken.None);
+        Assert.NotNull(offer);
+        Assert.Equal(riderId, offer.DriverId);
+        Assert.Equal(RideOfferStatuses.Pending, offer.Status);
+        Assert.Empty(advancer.AdvancedRideIds);
+
+        var ledger = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverWorkActivity>>();
+        Assert.DoesNotContain(ledger.Values, item =>
+            item.DriverId == riderId && item.ActivityType == "Rejected");
+    }
+
+    [Fact]
+    public async Task RiderCannotReadOrAcceptInternalDriverOffers()
+    {
+        const string riderId = "rider-cannot-read-driver-offers";
+        const string rideOwnerId = "ride-owner-for-driver-offer-read";
+        const string secondDriverId = "driver-after-rider-offer-read";
+        var advancer = new RecordingRideOfferAdvancer();
+        using var factory = new TurnOvaApiFactory(rideOfferAdvancer: advancer);
+        using var rider = factory.CreateClient("Rider", riderId);
+        using var driver = factory.CreateClient("Driver", riderId);
+        using var rideOwner = factory.CreateClient("Rider", rideOwnerId);
+        using var secondDriver = factory.CreateClient("Driver", secondDriverId);
+        SeedBookableDriver(factory, riderId, "union-rider-offer-read");
+        SeedBookableDriver(factory, secondDriverId, "union-second-offer-read");
+
+        var queueService = factory.Services.GetRequiredService<QueueService>();
+        await queueService.JoinAsync(new DriverQueueEntry(
+            riderId, "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-2), 0, true));
+        await queueService.JoinAsync(new DriverQueueEntry(
+            secondDriverId, "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-1), 0, true));
+        var ride = await CreateRideAsync(rideOwner, "request-rider-cannot-read-driver-offers-001");
+
+        // Positive controls prove the pending offer and actionable ride exist for the
+        // same subject when authenticated as Driver rather than Rider.
+        using var driverPending = await driver.GetAsync("/api/v1/driver/offers/pending");
+        Assert.Equal(HttpStatusCode.OK, driverPending.StatusCode);
+        using (var pendingJson = JsonDocument.Parse(await driverPending.Content.ReadAsStringAsync()))
+            Assert.Equal(ride.RideId, pendingJson.RootElement.GetProperty("rideId").GetString());
+
+        using var secondDriverPending = await secondDriver.GetAsync("/api/v1/driver/offers/pending");
+        Assert.Equal(HttpStatusCode.NoContent, secondDriverPending.StatusCode);
+
+        using var driverAvailable = await driver.GetAsync("/api/v1/driver/rides/available");
+        Assert.Equal(HttpStatusCode.OK, driverAvailable.StatusCode);
+        using (var availableJson = JsonDocument.Parse(await driverAvailable.Content.ReadAsStringAsync()))
+        {
+            var availableRide = Assert.Single(availableJson.RootElement.EnumerateArray());
+            Assert.Equal(ride.RideId, availableRide.GetProperty("rideId").GetString());
+        }
+
+        using var riderPending = await rider.GetAsync("/api/v1/driver/offers/pending");
+        Assert.Equal(HttpStatusCode.Forbidden, riderPending.StatusCode);
+
+        using var riderAvailable = await rider.GetAsync("/api/v1/driver/rides/available");
+        Assert.Equal(HttpStatusCode.Forbidden, riderAvailable.StatusCode);
+
+        using var riderAccept = await rider.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null);
+        Assert.Equal(HttpStatusCode.Forbidden, riderAccept.StatusCode);
+
+        var offer = await factory.Services.GetRequiredService<IRideOfferStore>()
+            .GetByRideAsync(ride.RideId, CancellationToken.None);
+        Assert.NotNull(offer);
+        Assert.Equal(riderId, offer.DriverId);
+        Assert.Equal(RideOfferStatuses.Pending, offer.Status);
+
+        var queue = await queueService.GetPositionedQueueAsync(
+            "hyderabad-central", "cab", CancellationToken.None);
+        Assert.Equal(new[] { riderId, secondDriverId }, queue.Select(entry => entry.DriverId));
+
+        using var rideResponse = await rideOwner.GetAsync($"/api/v1/rides/{ride.RideId}");
+        Assert.Equal(HttpStatusCode.OK, rideResponse.StatusCode);
+        var unchangedRide = await ReadRideAsync(rideResponse);
+        Assert.Equal("Requested", unchangedRide.Status);
+        Assert.Empty(advancer.AdvancedRideIds);
+    }
+
+    [Theory]
+    [InlineData("Rider")]
+    [InlineData("Ops")]
+    [InlineData("UnionManager")]
+    public async Task NonDriverRolesCannotReadOrMutateDriverAvailabilityOrLocation(string nonDriverRole)
+    {
+        const string driverId = "driver-availability-private";
+        const string unionId = "union-driver-availability-private";
+        using var factory = new TurnOvaApiFactory();
+        using var nonDriver = factory.CreateClient(nonDriverRole, driverId, unionId);
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        var queueService = factory.Services.GetRequiredService<QueueService>();
+        await queueService.JoinAsync(new DriverQueueEntry(
+            driverId, "hyderabad-central", "cab", DateTimeOffset.UtcNow, 0, true));
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var before = profiles[driverId];
+
+        using var nonDriverRead = await nonDriver.GetAsync("/api/v1/driver/availability");
+        Assert.Equal(HttpStatusCode.Forbidden, nonDriverRead.StatusCode);
+        AssertNoStore(nonDriverRead);
+
+        using var nonDriverOffline = await nonDriver.PostAsJsonAsync(
+            "/api/v1/driver/availability", new { isOnline = false });
+        Assert.Equal(HttpStatusCode.Forbidden, nonDriverOffline.StatusCode);
+        AssertNoStore(nonDriverOffline);
+
+        using var nonDriverLocation = await nonDriver.PostAsJsonAsync(
+            "/api/v1/driver/location",
+            new
+            {
+                latitude = 17.500,
+                longitude = 78.410,
+                capturedAtUtc = DateTimeOffset.UtcNow.AddSeconds(-1)
+            });
+        Assert.Equal(HttpStatusCode.Forbidden, nonDriverLocation.StatusCode);
+        AssertNoStore(nonDriverLocation);
+
+        using var driverRead = await driver.GetAsync("/api/v1/driver/availability");
+        Assert.Equal(HttpStatusCode.OK, driverRead.StatusCode);
+        using (var availability = JsonDocument.Parse(await driverRead.Content.ReadAsStringAsync()))
+        {
+            Assert.Equal("Online", availability.RootElement.GetProperty("availabilityStatus").GetString());
+            Assert.True(availability.RootElement.GetProperty("isOnline").GetBoolean());
+        }
+
+        var after = profiles[driverId];
+        Assert.Equal(before.AvailabilityStatus, after.AvailabilityStatus);
+        Assert.Equal(before.CurrentLatitude, after.CurrentLatitude);
+        Assert.Equal(before.CurrentLongitude, after.CurrentLongitude);
+        Assert.Equal(before.LocationUpdatedAtUtc, after.LocationUpdatedAtUtc);
+
+        var queue = await queueService.GetPositionedQueueAsync(
+            "hyderabad-central", "cab", CancellationToken.None);
+        var entry = Assert.Single(queue);
+        Assert.Equal(driverId, entry.DriverId);
+
+        static void AssertNoStore(HttpResponseMessage response)
+        {
+            Assert.True(response.Headers.CacheControl?.NoStore);
+            Assert.Contains(response.Headers.Pragma, value =>
+                value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    [Theory]
+    [InlineData("Rider")]
+    [InlineData("Ops")]
+    [InlineData("UnionManager")]
+    public async Task NonDriverRolesCannotReadDriverUnionAssignmentForSameDriverSubject(string nonDriverRole)
+    {
+        const string driverId = "driver-union-assignment-private";
+        const string unionId = "union-driver-assignment-private";
+        const string adminKey = "integration-test-admin-key-32chars";
+
+        using var factory = new TurnOvaApiFactory();
+        using var driver = factory.CreateClient("Driver", driverId);
+        using var nonDriver = factory.CreateClient(nonDriverRole, driverId, unionId);
+        if (nonDriverRole == "Ops")
+            nonDriver.DefaultRequestHeaders.Add("X-Driver-Admin-Key", adminKey);
+
+        SeedBookableDriver(factory, driverId, unionId);
+        var assignments = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
+        var originalAssignment = assignments[driverId];
+
+        using var denied = await nonDriver.GetAsync("/api/v1/driver/union");
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        Assert.True(denied.Headers.CacheControl?.NoStore);
+        Assert.Contains(denied.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(originalAssignment, assignments[driverId]);
+
+        if (nonDriverRole == "UnionManager")
+        {
+            // The same principal remains authorized for its own scoped Union oversight.
+            using var scopedMembers = await nonDriver.GetAsync("/api/v1/union/drivers");
+            Assert.Equal(HttpStatusCode.OK, scopedMembers.StatusCode);
+        }
+
+        using var allowed = await driver.GetAsync("/api/v1/driver/union");
+        Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
+        using var json = JsonDocument.Parse(await allowed.Content.ReadAsStringAsync());
+        Assert.Equal(unionId, json.RootElement.GetProperty("unionId").GetString());
+        Assert.Equal(originalAssignment, assignments[driverId]);
+    }
+
+    [Theory]
+    [InlineData("Rider")]
+    [InlineData("Ops")]
+    [InlineData("UnionManager")]
+    public async Task NonDriverRolesCannotReadOrModifyDriverOnboardingOrPrivateMedia(string nonDriverRole)
+    {
+        const string driverId = "driver-private-onboarding";
+        using var factory = new TurnOvaApiFactory();
+        using var nonDriver = factory.CreateClient(nonDriverRole, driverId, "union-private-onboarding");
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, "union-private-onboarding");
+
+        using var upload = await driver.PostAsJsonAsync(
+            "/api/v1/driver/onboarding/media",
+            new
+            {
+                documentType = "ProfilePhoto",
+                contentType = "image/jpeg",
+                contentBase64 = "/9j/4AAQSkZJRg=="
+            });
+        Assert.Equal(HttpStatusCode.Created, upload.StatusCode);
+        using var uploadedJson = JsonDocument.Parse(await upload.Content.ReadAsStringAsync());
+        var reference = uploadedJson.RootElement.GetProperty("storageReference").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(reference));
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var originalProfile = profiles[driverId];
+
+        var mediaPath = $"/api/v1/driver/onboarding/media/{Uri.EscapeDataString(reference!)}";
+        using var driverMedia = await driver.GetAsync(mediaPath);
+        Assert.Equal(HttpStatusCode.OK, driverMedia.StatusCode);
+        Assert.Contains("private", driverMedia.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("no-store", driverMedia.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("nosniff", driverMedia.Headers.GetValues("X-Content-Type-Options").Single());
+
+        using var nonDriverProfile = await nonDriver.GetAsync("/api/v1/driver/onboarding/me");
+        using var nonDriverUpload = await nonDriver.PostAsJsonAsync(
+            "/api/v1/driver/onboarding/media",
+            new
+            {
+                documentType = "ProfilePhoto",
+                contentType = "image/jpeg",
+                contentBase64 = "/9j/4AAQSkZJRg=="
+            });
+        using var nonDriverMedia = await nonDriver.GetAsync(mediaPath);
+        using var nonDriverMediaStatus = await nonDriver.GetAsync($"{mediaPath}/status");
+        using var nonDriverSelfieUpdate = await nonDriver.PutAsJsonAsync(
+            "/api/v1/driver/onboarding/selfie",
+            new { profilePhotoStorageReference = reference });
+        using var nonDriverOnboardingUpdate = await nonDriver.PostAsJsonAsync(
+            "/api/v1/driver/onboarding", ValidOnboardingRequest());
+
+        foreach (var denied in new[]
+        {
+            nonDriverProfile,
+            nonDriverUpload,
+            nonDriverMedia,
+            nonDriverMediaStatus,
+            nonDriverSelfieUpdate,
+            nonDriverOnboardingUpdate
+        })
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+            Assert.True(denied.Headers.CacheControl?.NoStore);
+            Assert.Contains(denied.Headers.Pragma, value =>
+                value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        }
+
+        Assert.Equal(originalProfile, profiles[driverId]);
+
+        using var driverProfile = await driver.GetAsync("/api/v1/driver/onboarding/me");
+        Assert.Equal(HttpStatusCode.OK, driverProfile.StatusCode);
+        Assert.Equal("cab", profiles[driverId].ServiceClass);
+        Assert.Equal("Approved", profiles[driverId].Status);
+    }
+
+    [Fact]
+    public async Task DriverRoleCannotUseRiderDiscoveryOrSelectedBookingForDualRoleSubject()
+    {
+        const string dualRoleSubject = "dual-role-rider-driver";
+        const string dualRoleUnionId = "dual-role-rider-driver-union";
+        const string selectedDriverId = "dual-role-selected-driver";
+        const string selectedUnionId = "dual-role-selected-union";
+        const string idempotencyKey = "dual-role-selected-booking-key";
+
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var driver = factory.CreateClient("Driver", dualRoleSubject);
+        using var rider = factory.CreateClient("Rider", dualRoleSubject);
+        using var selectedDriver = factory.CreateClient("Driver", selectedDriverId);
+        SeedBookableDriver(factory, dualRoleSubject, dualRoleUnionId);
+        SeedBookableDriver(factory, selectedDriverId, selectedUnionId);
+
+        const string discoveryPath =
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1";
+        using var deniedDiscovery = await driver.GetAsync(discoveryPath);
+        Assert.Equal(HttpStatusCode.Forbidden, deniedDiscovery.StatusCode);
+
+        using var allowedDiscovery = await rider.GetAsync(discoveryPath);
+        Assert.Equal(HttpStatusCode.OK, allowedDiscovery.StatusCode);
+
+        using var deniedBookingRequest = CreateSelectedBookingRequest(
+            idempotencyKey, selectedDriverId, selectedUnionId, "KPHB", "HITEC City", []);
+        using var deniedBooking = await driver.SendAsync(deniedBookingRequest);
+        Assert.Equal(HttpStatusCode.Forbidden, deniedBooking.StatusCode);
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var idempotencyRecords = factory.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>();
+        var driverReservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+        var riderReservations = factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>();
+        Assert.Empty(rides);
+        Assert.Empty(idempotencyRecords);
+        Assert.Null(await driverReservations.GetActiveAsync(selectedDriverId));
+        Assert.Null(await riderReservations.GetActiveAsync(dualRoleSubject));
+
+        using var allowedBookingRequest = CreateSelectedBookingRequest(
+            idempotencyKey, selectedDriverId, selectedUnionId, "KPHB", "HITEC City", []);
+        using var allowedBooking = await rider.SendAsync(allowedBookingRequest);
+        Assert.Equal(HttpStatusCode.Created, allowedBooking.StatusCode);
+        Assert.Single(rides);
+        Assert.NotNull(await driverReservations.GetActiveAsync(selectedDriverId));
+        Assert.NotNull(await riderReservations.GetActiveAsync(dualRoleSubject));
+    }
+
+    [Fact]
+    public async Task UnionManagerCannotUseDriverSelfServiceOrRiderWorkflowsForMemberSubject()
+    {
+        const string subject = "union-manager-driver-boundary";
+        const string unionId = "union-manager-driver-boundary-union";
+        const string selectedDriverId = "union-manager-boundary-selected-driver";
+        const string selectedUnionId = "union-manager-boundary-selected-union";
+        const string agreementRideId = "union-manager-boundary-agreement-ride";
+        const string agreementRiderId = "union-manager-boundary-agreement-rider";
+
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        SeedAgreementRide(factory, agreementRideId, agreementRiderId, subject);
+        using var driverProfileClient = factory.CreateClient("Driver", subject);
+        using var selectedDriverProfileClient = factory.CreateClient("Driver", selectedDriverId);
+        using var manager = factory.CreateUnionManagerClient(unionId, subject);
+        SeedBookableDriver(factory, subject, unionId);
+        SeedBookableDriver(factory, selectedDriverId, selectedUnionId);
+
+        // Positive control: this identity is a valid manager for the assigned Union.
+        using var unionMembers = await manager.GetAsync("/api/v1/union/drivers");
+        Assert.Equal(HttpStatusCode.OK, unionMembers.StatusCode);
+
+        using var onboarding = await manager.GetAsync("/api/v1/driver/onboarding/me");
+        Assert.Equal(HttpStatusCode.Forbidden, onboarding.StatusCode);
+        using var availability = await manager.GetAsync("/api/v1/driver/availability");
+        Assert.Equal(HttpStatusCode.Forbidden, availability.StatusCode);
+        using var driverHistory = await manager.GetAsync("/api/v1/driver/rides/mine");
+        Assert.Equal(HttpStatusCode.Forbidden, driverHistory.StatusCode);
+        using var payslip = await manager.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
+        Assert.Equal(HttpStatusCode.Forbidden, payslip.StatusCode);
+
+        using var discovery = await manager.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+        Assert.Equal(HttpStatusCode.Forbidden, discovery.StatusCode);
+        using var riderHistory = await manager.GetAsync("/api/v1/rides/mine");
+        Assert.Equal(HttpStatusCode.Forbidden, riderHistory.StatusCode);
+
+        using var bookingRequest = CreateSelectedBookingRequest(
+            "union-manager-driver-boundary-booking", selectedDriverId, selectedUnionId,
+            "KPHB", "HITEC City", []);
+        using var booking = await manager.SendAsync(bookingRequest);
+        Assert.Equal(HttpStatusCode.Forbidden, booking.StatusCode);
+
+        using var agreementHistory = await manager.GetAsync(
+            $"/api/v1/rides/{agreementRideId}/agreements");
+        Assert.Equal(HttpStatusCode.NotFound, agreementHistory.StatusCode);
+
+        using var agreementProposalRequest = new HttpRequestMessage(
+            HttpMethod.Post, $"/api/v1/rides/{agreementRideId}/agreements")
+        {
+            Content = JsonContent.Create(new { amount = 250m, currency = "INR" })
+        };
+        agreementProposalRequest.Headers.Add("Idempotency-Key", "union-manager-agreement-proposal");
+        using var agreementProposal = await manager.SendAsync(agreementProposalRequest);
+        Assert.Equal(HttpStatusCode.NotFound, agreementProposal.StatusCode);
+
+        using var agreementConfirmation = await manager.PostAsync(
+            $"/api/v1/rides/{agreementRideId}/agreements/1/confirm", content: null);
+        Assert.Equal(HttpStatusCode.NotFound, agreementConfirmation.StatusCode);
+
+        // Union membership grants scoped oversight, not Rider or Driver authority over a live ride.
+        using var rideDetails = await manager.GetAsync($"/api/v1/rides/{agreementRideId}");
+        Assert.Equal(HttpStatusCode.Forbidden, rideDetails.StatusCode);
+        using var riderCancel = await manager.PostAsync($"/api/v1/rides/{agreementRideId}/cancel", content: null);
+        Assert.Equal(HttpStatusCode.Forbidden, riderCancel.StatusCode);
+        using var driverAccept = await manager.PostAsync($"/api/v1/rides/{agreementRideId}/accept", content: null);
+        Assert.Equal(HttpStatusCode.Forbidden, driverAccept.StatusCode);
+        using var driverReject = await manager.PostAsync($"/api/v1/rides/{agreementRideId}/reject", content: null);
+        Assert.Equal(HttpStatusCode.Forbidden, driverReject.StatusCode);
+        using var driverArrive = await manager.PostAsync($"/api/v1/rides/{agreementRideId}/arrive", content: null);
+        Assert.Equal(HttpStatusCode.Forbidden, driverArrive.StatusCode);
+        using var driverStart = await manager.PostAsync($"/api/v1/rides/{agreementRideId}/start", content: null);
+        Assert.Equal(HttpStatusCode.Forbidden, driverStart.StatusCode);
+        using var driverComplete = await manager.PostAsync($"/api/v1/rides/{agreementRideId}/complete", content: null);
+        Assert.Equal(HttpStatusCode.Forbidden, driverComplete.StatusCode);
+        using var driverLocationRequest = new HttpRequestMessage(
+            HttpMethod.Post, $"/api/v1/rides/{agreementRideId}/location")
+        {
+            Content = JsonContent.Create(new { latitude = 17.493, longitude = 78.399 })
+        };
+        using var driverLocation = await manager.SendAsync(driverLocationRequest);
+        Assert.Equal(HttpStatusCode.Forbidden, driverLocation.StatusCode);
+
+        // UnionManager membership does not grant the separate Operations admin-key authority.
+        using var opsDriverDetails = await manager.GetAsync($"/api/v1/ops/drivers/{subject}");
+        Assert.Equal(HttpStatusCode.Unauthorized, opsDriverDetails.StatusCode);
+        using var opsUnionList = await manager.GetAsync("/api/v1/ops/unions");
+        Assert.Equal(HttpStatusCode.Unauthorized, opsUnionList.StatusCode);
+        using var opsUnionMembers = await manager.GetAsync($"/api/v1/ops/unions/{unionId}/drivers");
+        Assert.Equal(HttpStatusCode.Unauthorized, opsUnionMembers.StatusCode);
+        using var opsSelfieReviewRequest = new HttpRequestMessage(
+            HttpMethod.Put, $"/api/v1/ops/unions/{unionId}/drivers/{subject}/selfie-review")
+        {
+            Content = JsonContent.Create(new { status = "Approved", reason = (string?)null })
+        };
+        using var opsSelfieReview = await manager.SendAsync(opsSelfieReviewRequest);
+        Assert.Equal(HttpStatusCode.Unauthorized, opsSelfieReview.StatusCode);
+
+        using var paymentReportRequest = CreatePaymentReportRequest(
+            agreementRideId, "union-manager-payment-report", 100m);
+        using var paymentReport = await manager.SendAsync(paymentReportRequest);
+        Assert.Equal(HttpStatusCode.Forbidden, paymentReport.StatusCode);
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        Assert.Equal("Online", profiles[subject].AvailabilityStatus);
+        Assert.Equal(unionId,
+            factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>()[subject].UnionId);
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var protectedRide = Assert.Single(rides.Values);
+        Assert.Equal(agreementRideId, protectedRide.RideId);
+        Assert.Empty(protectedRide.AgreementVersions ?? []);
+        Assert.Empty(protectedRide.AgreementConfirmations ?? []);
+        Assert.Null(protectedRide.PaymentReconciliation);
+        Assert.Empty(protectedRide.AuditEvents ?? []);
+
+        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>());
+        Assert.Null(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .GetActiveAsync(selectedDriverId));
+        Assert.Null(await factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>()
+            .GetActiveAsync(subject));
     }
 
     [Fact]
@@ -909,7 +1532,7 @@ public sealed partial class RideApiIntegrationTests
             .GetActiveAsync("legacy-active-rider"));
         Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
             .HasActiveAsync("legacy-active-new-driver"));
-        Assert.Single(rides.Values.Where(ride => ride.RiderId == "legacy-active-rider"));
+        Assert.Single(rides.Values, ride => ride.RiderId == "legacy-active-rider");
     }
 
     [Fact]
@@ -1702,7 +2325,7 @@ public sealed partial class RideApiIntegrationTests
             new { unionId = newUnionId, reason = "Contact operator@example.com" });
         Assert.Equal(HttpStatusCode.BadRequest, transfer.StatusCode);
         Assert.Equal(originalAssignment, assignments[driverId]);
-        Assert.Empty(audit.Values.Where(item => item.DriverId == driverId));
+        Assert.DoesNotContain(audit.Values, item => item.DriverId == driverId);
         Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>().HasActiveAsync(driverId));
 
         // Older stored free text is not echoed to UnionManager member projections.
@@ -1745,10 +2368,25 @@ public sealed partial class RideApiIntegrationTests
             ProfilePhotoReviewReason = null
         };
 
-        using var manager = factory.CreateUnionManagerClient(unionId, "union-manager-review");
+        using var manager = factory.CreateUnionManagerClient(unionId, "union-manager-review", subjectClaimType: "nameid");
         using var retryManager = factory.CreateUnionManagerClient(unionId, "union-manager-review-retry");
         using var otherManager = factory.CreateUnionManagerClient("another-union", "other-union-manager");
         using var managerWithoutUnion = factory.CreateClient("UnionManager", "manager-without-union");
+        using var managerWithoutSubject = factory.CreateUnionManagerClient(
+            unionId, "union-manager-without-subject", subjectClaimType: "unrecognized-subject");
+        var reservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+        var unionAudit = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+
+        using var subjectlessMemberRead = await managerWithoutSubject.GetAsync("/api/v1/union/drivers");
+        Assert.Equal(HttpStatusCode.Forbidden, subjectlessMemberRead.StatusCode);
+        using var subjectlessSelfieReview = await managerWithoutSubject.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review",
+            new { status = "Approved", reason = (string?)null });
+        Assert.Equal(HttpStatusCode.Forbidden, subjectlessSelfieReview.StatusCode);
+        Assert.Equal("Pending", profiles[driverId].ProfilePhotoApprovalStatus);
+        Assert.DoesNotContain(unionAudit.Values,
+            item => item.DriverId == driverId && item.EventType == "SelfieApprovedByUnion");
+        Assert.False(await reservations.HasActiveAsync(driverId));
 
         var members = await manager.GetFromJsonAsync<List<JsonElement>>("/api/v1/union/drivers");
         var member = Assert.Single(members!);
@@ -1792,7 +2430,6 @@ public sealed partial class RideApiIntegrationTests
             $"/api/v1/union/drivers/{driverId}/selfie-review", new { status = "Approved", reason = (string?)null });
         Assert.Equal(HttpStatusCode.NotFound, wrongUnionReview.StatusCode);
 
-        var reservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
         Assert.False(await reservations.HasActiveAsync(driverId));
         using var noClaimReview = await managerWithoutUnion.PutAsJsonAsync(
             $"/api/v1/union/drivers/{driverId}/selfie-review", new { status = "Approved", reason = (string?)null });
@@ -1828,9 +2465,8 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal(HttpStatusCode.OK, repeatedApproval.StatusCode);
         Assert.Equal("Approved", profiles[driverId].ProfilePhotoApprovalStatus);
         Assert.Equal(unionId, profiles[driverId].ProfilePhotoApprovedByUnionId);
-        var unionAudit = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
-        var approvalAudit = Assert.Single(unionAudit.Values.Where(item =>
-            item.DriverId == driverId && item.EventType == "SelfieApprovedByUnion"));
+        var approvalAudit = Assert.Single(unionAudit.Values, item =>
+            item.DriverId == driverId && item.EventType == "SelfieApprovedByUnion");
         Assert.Equal("union-manager-review", approvalAudit.Actor);
 
         using var discoveryAfterApproval = await rider.GetAsync(
@@ -1938,6 +2574,84 @@ public sealed partial class RideApiIntegrationTests
         Assert.Single(finalAudit!, item =>
             item.GetProperty("eventType").GetString() == "SelfieRejectedByOperations" &&
             item.GetProperty("eventId").GetString() == originalEventId);
+    }
+
+    [Theory]
+    [InlineData("service-classes")]
+    [InlineData("zone-ids")]
+    public async Task MalformedUnionCoverageMetadataIsExcludedFromDiscoveryAndPartnerActions(string missingField)
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string unionId = "union-review-missing-coverage";
+        const string driverId = "union-review-missing-coverage-driver";
+        using var driver = factory.CreateClient("Driver", driverId);
+        using var rider = factory.CreateClient("Rider", "union-review-missing-coverage-rider");
+        SeedBookableDriver(factory, driverId, unionId);
+
+        var pdf = Encoding.ASCII.GetBytes("%PDF-1.4\nunion-review-document");
+        using var upload = await driver.PostAsJsonAsync("/api/v1/driver/onboarding/media", new
+        {
+            documentType = "DrivingLicence",
+            contentType = "application/pdf",
+            contentBase64 = Convert.ToBase64String(pdf)
+        });
+        Assert.Equal(HttpStatusCode.Created, upload.StatusCode);
+        using var uploadJson = JsonDocument.Parse(await upload.Content.ReadAsStringAsync());
+        var documentReference = uploadJson.RootElement.GetProperty("storageReference").GetString()!;
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        profiles[driverId] = profiles[driverId] with
+        {
+            Documents =
+            [
+                new DriverDocumentReference("DrivingLicence", documentReference, "Approved"),
+                new DriverDocumentReference("VehicleRegistration", "test/vehicle-registration", "Approved")
+            ]
+        };
+
+        var unions = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>();
+        var union = unions[unionId];
+        unions[unionId] = missingField switch
+        {
+            "service-classes" => union with { ServiceClasses = null! },
+            "zone-ids" => union with { ZoneIds = null! },
+            _ => throw new ArgumentOutOfRangeException(nameof(missingField), missingField, "Unknown missing Union coverage field.")
+        };
+
+        using var manager = factory.CreateUnionManagerClient(unionId, "union-manager-missing-coverage");
+        var profileBefore = profiles[driverId];
+        var assignments = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
+        var assignmentBefore = assignments[driverId];
+        var unionAudit = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+        var auditBefore = unionAudit.Values.Where(item => item.DriverId == driverId).ToArray();
+        var reservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+
+        using var review = await manager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review",
+            new { status = "Approved", reason = (string?)null });
+        Assert.Equal(HttpStatusCode.NotFound, review.StatusCode);
+        Assert.True(review.Headers.CacheControl?.NoStore);
+        Assert.Contains(review.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+
+        using var privateDocument = await manager.GetAsync(
+            $"/api/v1/union/drivers/{driverId}/documents/DrivingLicence");
+        Assert.Equal(HttpStatusCode.NotFound, privateDocument.StatusCode);
+
+        using var membersResponse = await manager.GetAsync("/api/v1/union/drivers");
+        Assert.Equal(HttpStatusCode.OK, membersResponse.StatusCode);
+        Assert.Empty(await membersResponse.Content.ReadFromJsonAsync<List<JsonElement>>() ?? []);
+
+        using var discovery = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+        Assert.Equal(HttpStatusCode.OK, discovery.StatusCode);
+        using var discoveryJson = JsonDocument.Parse(await discovery.Content.ReadAsStringAsync());
+        Assert.Equal(0, discoveryJson.RootElement.GetProperty("unions").GetArrayLength());
+
+        Assert.Equal(profileBefore, profiles[driverId]);
+        Assert.Equal(assignmentBefore, assignments[driverId]);
+        Assert.Equal(auditBefore, unionAudit.Values.Where(item => item.DriverId == driverId).ToArray());
+        Assert.False(await reservations.HasActiveAsync(driverId));
     }
 
     [Fact]
@@ -2398,8 +3112,8 @@ public sealed partial class RideApiIntegrationTests
             $"/api/v1/ops/drivers/{driverId}/union-assignment",
             new { unionId = newUnionId, reason = "Driver moved to the new Cab union." });
         Assert.Equal(HttpStatusCode.OK, transfer.StatusCode);
-        var transferAudit = Assert.Single(auditStore.Values.Where(item =>
-            item.DriverId == driverId && item.EventType == "Transferred"));
+        var transferAudit = Assert.Single(auditStore.Values, item =>
+            item.DriverId == driverId && item.EventType == "Transferred");
         Assert.Equal("Operations", transferAudit.Actor);
 
         var transferredProfile = profiles[driverId];
@@ -2628,7 +3342,7 @@ public sealed partial class RideApiIntegrationTests
         Assert.Equal("Requested", stillAvailable.Status);
 
         var ledger = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverWorkActivity>>();
-        Assert.Single(ledger.Values.Where(item => item.DriverId == "driver-decline-test" && item.ActivityType == "Rejected"));
+        Assert.Single(ledger.Values, item => item.DriverId == "driver-decline-test" && item.ActivityType == "Rejected");
     }
 
 
@@ -2835,6 +3549,11 @@ public sealed partial class RideApiIntegrationTests
 
         using var response = await driver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.Private);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.Contains(response.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
         var pdfBytes = await response.Content.ReadAsByteArrayAsync();
         var pdfHeader = Encoding.ASCII.GetString(pdfBytes);
         Assert.StartsWith("%PDF-1.4", pdfHeader);
@@ -2853,6 +3572,11 @@ public sealed partial class RideApiIntegrationTests
 
         using var repeated = await driver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
         Assert.Equal(HttpStatusCode.OK, repeated.StatusCode);
+        Assert.True(repeated.Headers.CacheControl?.Private);
+        Assert.True(repeated.Headers.CacheControl?.NoStore);
+        Assert.Contains(repeated.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("nosniff", repeated.Headers.GetValues("X-Content-Type-Options").Single());
         Assert.Equal(
             ExtractPayslipPdfText(pdfBytes),
             ExtractPayslipPdfText(await repeated.Content.ReadAsByteArrayAsync()));
@@ -2939,6 +3663,79 @@ public sealed partial class RideApiIntegrationTests
 
         var riderResponse = await rider.GetAsync($"/api/v1/driver/payslips/{futureMonth.Year}/{futureMonth.Month}.pdf");
         Assert.Equal(HttpStatusCode.Forbidden, riderResponse.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("Rider")]
+    [InlineData("Ops")]
+    [InlineData("UnionManager")]
+    public async Task NonDriverRolesCannotReadPersistedDriverPayslipForSameSubject(string nonDriverRole)
+    {
+        const string driverId = "driver-private-payslip";
+        const string unionId = "union-private-payslip";
+        const string payslipId = $"{driverId}-2026-10";
+        using var factory = new TurnOvaApiFactory();
+        using var nonDriver = factory.CreateClient(nonDriverRole, driverId, unionId);
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        var payslips = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverMonthlyPayslip>>();
+        var originalSnapshot = new DriverMonthlyPayslip(
+            payslipId, driverId, "Private Payslip Driver", unionId, "Selected Booking Union",
+            2026, 10,
+            new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.FromHours(5.5)),
+            new DateTimeOffset(2026, 10, 31, 23, 59, 59, TimeSpan.FromHours(5.5)),
+            1, 2, 1, 0, DateTimeOffset.UtcNow);
+        payslips[$"{driverId}|{payslipId}"] = originalSnapshot;
+
+        using var denied = await nonDriver.GetAsync("/api/v1/driver/payslips/2026/10.pdf");
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        Assert.NotEqual("application/pdf", denied.Content.Headers.ContentType?.MediaType);
+        Assert.True(denied.Headers.CacheControl?.NoStore);
+        Assert.Contains(denied.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal(originalSnapshot, payslips[$"{driverId}|{payslipId}"]);
+    }
+
+    [Theory]
+    [InlineData("Rider")]
+    [InlineData("Ops")]
+    [InlineData("UnionManager")]
+    public async Task NonDriverRolesCannotReportDirectPaymentForSameDriverSubject(string nonDriverRole)
+    {
+        const string driverId = "driver-private-payment-report";
+        const string unionId = "union-private-payment-report";
+        const string idempotencyKey = "payment-report-role-boundary";
+
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "payment-report-role-boundary-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+        using var nonDriver = factory.CreateClient(nonDriverRole, driverId, unionId);
+        var rideId = await CreateCompletedSelectedRideAsync(
+            factory, rider, driver, driverId, unionId, "payment-report-role-boundary-booking", 500m);
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var before = rides[rideId];
+        Assert.Null(before.PaymentReconciliation);
+
+        using var deniedRequest = CreatePaymentReportRequest(rideId, idempotencyKey, 400m);
+        using var denied = await nonDriver.SendAsync(deniedRequest);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        Assert.True(denied.Headers.CacheControl?.NoStore);
+        Assert.Contains(denied.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+
+        var afterDenied = rides[rideId];
+        Assert.Equal(before, afterDenied);
+        Assert.Null(afterDenied.PaymentReconciliation);
+
+        // Authorization must run before payment-report idempotency is consumed.
+        using var allowedRequest = CreatePaymentReportRequest(rideId, idempotencyKey, 400m);
+        using var allowed = await driver.SendAsync(allowedRequest);
+        Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
+        Assert.Equal(400m, rides[rideId].PaymentReconciliation!.AmountReceived);
+        Assert.Equal("DriverReportedUnverified", rides[rideId].PaymentReconciliation!.Status);
     }
 
     [Fact]
@@ -3032,8 +3829,8 @@ public sealed partial class RideApiIntegrationTests
             firstDriver.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null),
             secondDriver.PostAsync($"/api/v1/rides/{ride.RideId}/accept", null));
 
-        Assert.Single(results.Where(response => response.StatusCode == HttpStatusCode.OK));
-        Assert.Single(results.Where(response => response.StatusCode == HttpStatusCode.Conflict));
+        Assert.Single(results, response => response.StatusCode == HttpStatusCode.OK);
+        Assert.Single(results, response => response.StatusCode == HttpStatusCode.Conflict);
     }
 
     [Fact]
@@ -3354,6 +4151,49 @@ public sealed partial class RideApiIntegrationTests
         Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>());
     }
 
+    [Fact]
+    public async Task RiderDiscoveryAndOperationsHideSelfieWhenUnionReviewSnapshotConflictsWithCurrentUnion()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "inconsistent-selfie-driver";
+        const string unionId = "inconsistent-selfie-union";
+        using var rider = factory.CreateClient("Rider", "inconsistent-selfie-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+        using var ops = factory.CreateClient("Ops", "inconsistent-selfie-ops");
+        ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+
+        SeedBookableDriver(factory, driverId, unionId);
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var now = DateTimeOffset.UtcNow;
+        profiles[driverId] = profiles[driverId] with
+        {
+            ProfilePhotoBase64 = "/9j/2Q==",
+            ProfilePhotoContentType = "image/jpeg",
+            ProfilePhotoCapturedAtUtc = now,
+            ProfilePhotoApprovalStatus = "Approved",
+            ProfilePhotoApprovedByUnionId = unionId,
+            ProfilePhotoReviewedAtUtc = now,
+            ProfilePhotoReviewReason = null,
+            ProfilePhotoUnionReviewActorId = "former-union-manager",
+            ProfilePhotoUnionReviewUnionId = "previous-union",
+            ProfilePhotoUnionReviewUnionName = "Previous Union"
+        };
+
+        using var operationsResponse = await ops.GetAsync($"/api/v1/ops/unions/{unionId}/drivers");
+        Assert.Equal(HttpStatusCode.OK, operationsResponse.StatusCode);
+        using var operationsJson = JsonDocument.Parse(await operationsResponse.Content.ReadAsStringAsync());
+        var operationsDriver = Assert.Single(operationsJson.RootElement.EnumerateArray()).GetProperty("driver");
+        Assert.Equal(JsonValueKind.Null, operationsDriver.GetProperty("profilePhotoBase64").ValueKind);
+
+        using var discoveryResponse = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+        Assert.Equal(HttpStatusCode.OK, discoveryResponse.StatusCode);
+        using var discoveryJson = JsonDocument.Parse(await discoveryResponse.Content.ReadAsStringAsync());
+        var unionGroup = Assert.Single(discoveryJson.RootElement.GetProperty("unions").EnumerateArray());
+        var discoveredDriver = Assert.Single(unionGroup.GetProperty("drivers").EnumerateArray());
+        Assert.Equal(driverId, discoveredDriver.GetProperty("driverId").GetString());
+        Assert.Equal(JsonValueKind.Null, discoveredDriver.GetProperty("profilePhotoBase64").ValueKind);
+    }
     [Fact]
     public async Task RiderDiscoveryGroupsApprovedUnionsCapsThreeAndOrdersByPickupProximityWithoutQueueDependency()
     {
@@ -4940,8 +5780,8 @@ public sealed partial class RideApiIntegrationTests
         using var requestB = CreateSelectedBookingRequest("selected-key-b", "selected-shared-driver",
             "selected-shared-union", "KPHB", "Madhapur", []);
         var responses = await Task.WhenAll(riderA.SendAsync(requestA), riderB.SendAsync(requestB));
-        Assert.Single(responses.Where(response => response.StatusCode == HttpStatusCode.Created));
-        Assert.Single(responses.Where(response => response.StatusCode == HttpStatusCode.Conflict));
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Created);
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Conflict);
         var created = responses.Single(response => response.StatusCode == HttpStatusCode.Created);
         using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
         var rideId = createdJson.RootElement.GetProperty("rideId").GetString()!;
@@ -5163,6 +6003,49 @@ public sealed partial class RideApiIntegrationTests
         Assert.Empty(advancer.AdvancedRideIds);
         Assert.False(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
             .HasActiveAsync("selected-expiry-no-fifo-driver"));
+    }
+
+    [Fact]
+    public async Task RiderCancellingSelectedNegotiationDoesNotAdvanceLegacyFifoOffer()
+    {
+        const string riderId = "selected-cancel-no-fifo-rider";
+        const string driverId = "selected-cancel-no-fifo-driver";
+        const string unionId = "selected-cancel-no-fifo-union";
+        var advancer = new RecordingRideOfferAdvancer();
+        using var factory = new TurnOvaApiFactory(
+            legacyFifoRiderRequestsEnabled: false,
+            rideOfferAdvancer: advancer);
+        using var rider = factory.CreateClient("Rider", riderId);
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        using var request = CreateSelectedBookingRequest(
+            "selected-cancel-no-fifo-key", driverId, unionId, "KPHB", "HITEC City", []);
+        using var booking = await rider.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Created, booking.StatusCode);
+        using var bookingJson = JsonDocument.Parse(await booking.Content.ReadAsStringAsync());
+        var rideId = bookingJson.RootElement.GetProperty("rideId").GetString()!;
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var driverReservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+        var riderReservations = factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>();
+        Assert.True(await driverReservations.HasActiveAsync(driverId));
+        Assert.NotNull(await riderReservations.GetActiveAsync(riderId));
+
+        using var cancelled = await rider.PostAsync($"/api/v1/rides/{rideId}/cancel", null);
+        Assert.Equal(HttpStatusCode.OK, cancelled.StatusCode);
+
+        var cancelledRide = rides[rideId];
+        Assert.Equal("Cancelled", cancelledRide.Status);
+        var cancellationEvent = Assert.Single(cancelledRide.AuditEvents!,
+            item => item.EventType == "RideStatusChanged" && item.NewStatus == "Cancelled");
+        Assert.Equal(riderId, cancellationEvent.ActorId);
+        Assert.Equal("Rider", cancellationEvent.ActorRole);
+        Assert.Equal("Negotiating", cancellationEvent.PreviousStatus);
+
+        Assert.Empty(advancer.AdvancedRideIds);
+        Assert.False(await driverReservations.HasActiveAsync(driverId));
+        Assert.Null(await riderReservations.GetActiveAsync(riderId));
     }
 
     [Fact]
@@ -6771,6 +7654,227 @@ public sealed partial class RideApiIntegrationTests
     }
 
 
+    [Fact]
+    public async Task OpsRoleCannotUseRiderDiscoveryOrSelectedBookingForSamePartySubject()
+    {
+        const string subject = "ops-discovery-booking-boundary-subject";
+        const string memberUnionId = "ops-discovery-booking-member-union";
+        const string selectedDriverId = "ops-discovery-booking-selected-driver";
+        const string selectedUnionId = "ops-discovery-booking-selected-union";
+        const string idempotencyKey = "ops-discovery-booking-boundary-key";
+        const string adminKey = "integration-test-admin-key-32chars";
+
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var memberDriver = factory.CreateClient("Driver", subject);
+        using var selectedDriver = factory.CreateClient("Driver", selectedDriverId);
+        SeedBookableDriver(factory, subject, memberUnionId);
+        SeedBookableDriver(factory, selectedDriverId, selectedUnionId);
+
+        using var rider = factory.CreateClient("Rider", subject);
+        using var ops = factory.CreateClient("Ops", subject);
+        ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", adminKey);
+
+        const string discoveryPath =
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1";
+        using var deniedDiscovery = await ops.GetAsync(discoveryPath);
+        Assert.Equal(HttpStatusCode.Forbidden, deniedDiscovery.StatusCode);
+        Assert.True(deniedDiscovery.Headers.CacheControl?.NoStore);
+        Assert.Contains(deniedDiscovery.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+
+        using var allowedDiscovery = await rider.GetAsync(discoveryPath);
+        Assert.Equal(HttpStatusCode.OK, allowedDiscovery.StatusCode);
+
+        using var deniedBookingRequest = CreateSelectedBookingRequest(
+            idempotencyKey, selectedDriverId, selectedUnionId, "KPHB", "HITEC City", []);
+        using var deniedBooking = await ops.SendAsync(deniedBookingRequest);
+        Assert.Equal(HttpStatusCode.Forbidden, deniedBooking.StatusCode);
+        Assert.True(deniedBooking.Headers.CacheControl?.NoStore);
+        Assert.Contains(deniedBooking.Headers.Pragma, value =>
+            value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var idempotencyRecords = factory.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>();
+        var driverReservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+        var riderReservations = factory.Services.GetRequiredService<IRiderActiveBookingReservationStore>();
+        Assert.Empty(rides);
+        Assert.Empty(idempotencyRecords);
+        Assert.Null(await driverReservations.GetActiveAsync(subject));
+        Assert.Null(await driverReservations.GetActiveAsync(selectedDriverId));
+        Assert.Null(await riderReservations.GetActiveAsync(subject));
+
+        // A real Rider sharing the exact subject and idempotency key can still book;
+        // the denied Operations request must not consume either reservation or key.
+        using var allowedBookingRequest = CreateSelectedBookingRequest(
+            idempotencyKey, selectedDriverId, selectedUnionId, "KPHB", "HITEC City", []);
+        using var allowedBooking = await rider.SendAsync(allowedBookingRequest);
+        Assert.Equal(HttpStatusCode.Created, allowedBooking.StatusCode);
+        Assert.Single(rides);
+        Assert.Single(idempotencyRecords);
+        Assert.Null(await driverReservations.GetActiveAsync(subject));
+        Assert.NotNull(await driverReservations.GetActiveAsync(selectedDriverId));
+        Assert.NotNull(await riderReservations.GetActiveAsync(subject));
+    }
+
+    [Fact]
+    public async Task OpsRoleCannotReadOrMutateRiderAndDriverRideLifecycleForSamePartySubjects()
+    {
+        const string riderId = "ops-ride-boundary-rider";
+        const string driverId = "ops-ride-boundary-driver";
+        const string rideId = "RIDE-OPS-LIFECYCLE-BOUNDARY";
+        const string adminKey = "integration-test-admin-key-32chars";
+
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", riderId);
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedAgreementRide(factory, rideId, riderId, driverId);
+        SeedBookableDriver(factory, driverId, "agreement-union");
+
+        using var opsAsRider = factory.CreateClient("Ops", riderId);
+        using var opsAsDriver = factory.CreateClient("Ops", driverId);
+        opsAsRider.DefaultRequestHeaders.Add("X-Driver-Admin-Key", adminKey);
+        opsAsDriver.DefaultRequestHeaders.Add("X-Driver-Admin-Key", adminKey);
+
+        // The same identities retain their own role-specific access, and the Ops
+        // identity retains its separate admin-key authority.
+        using var riderDetails = await rider.GetAsync($"/api/v1/rides/{rideId}");
+        Assert.Equal(HttpStatusCode.OK, riderDetails.StatusCode);
+        using var driverHistory = await driver.GetAsync("/api/v1/driver/rides/mine");
+        Assert.Equal(HttpStatusCode.OK, driverHistory.StatusCode);
+        using var opsAdminRead = await opsAsDriver.GetAsync($"/api/v1/ops/drivers/{driverId}");
+        Assert.Equal(HttpStatusCode.OK, opsAdminRead.StatusCode);
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var initialRide = rides[rideId];
+
+        static void AssertForbidden(HttpResponseMessage response) =>
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+        using var opsRiderDetails = await opsAsRider.GetAsync($"/api/v1/rides/{rideId}");
+        AssertForbidden(opsRiderDetails);
+        using var opsRiderHistory = await opsAsRider.GetAsync("/api/v1/rides/mine");
+        AssertForbidden(opsRiderHistory);
+        using var opsRiderCancel = await opsAsRider.PostAsync($"/api/v1/rides/{rideId}/cancel", content: null);
+        AssertForbidden(opsRiderCancel);
+
+        using var opsDriverHistory = await opsAsDriver.GetAsync("/api/v1/driver/rides/mine");
+        AssertForbidden(opsDriverHistory);
+        using var opsDriverPendingOffers = await opsAsDriver.GetAsync("/api/v1/driver/offers/pending");
+        AssertForbidden(opsDriverPendingOffers);
+        using var opsDriverAvailableRides = await opsAsDriver.GetAsync("/api/v1/driver/rides/available");
+        AssertForbidden(opsDriverAvailableRides);
+        using var opsDriverAccept = await opsAsDriver.PostAsync($"/api/v1/rides/{rideId}/accept", content: null);
+        AssertForbidden(opsDriverAccept);
+        using var opsDriverReject = await opsAsDriver.PostAsync($"/api/v1/rides/{rideId}/reject", content: null);
+        AssertForbidden(opsDriverReject);
+        using var opsDriverArrive = await opsAsDriver.PostAsync($"/api/v1/rides/{rideId}/arrive", content: null);
+        AssertForbidden(opsDriverArrive);
+        using var opsDriverStart = await opsAsDriver.PostAsync($"/api/v1/rides/{rideId}/start", content: null);
+        AssertForbidden(opsDriverStart);
+        using var opsDriverComplete = await opsAsDriver.PostAsync($"/api/v1/rides/{rideId}/complete", content: null);
+        AssertForbidden(opsDriverComplete);
+        using var opsDriverLocation = await opsAsDriver.PostAsJsonAsync(
+            $"/api/v1/rides/{rideId}/location",
+            new { latitude = 17.493, longitude = 78.399 });
+        AssertForbidden(opsDriverLocation);
+
+        Assert.Equal(initialRide, rides[rideId]);
+        Assert.Empty(rides[rideId].AuditEvents ?? []);
+        Assert.Null(rides[rideId].PaymentReconciliation);
+        Assert.Empty(factory.Services.GetRequiredService<ConcurrentDictionary<string, RideIdempotencyRecord>>());
+        Assert.Null(await factory.Services.GetRequiredService<IDriverRideReservationStore>()
+            .GetActiveAsync(driverId));
+    }
+
+    [Fact]
+    public async Task OpsRoleCannotUseRideAgreementEndpointsForSamePartySubjects()
+    {
+        const string riderId = "agreement-ops-boundary-rider";
+        const string driverId = "agreement-ops-boundary-driver";
+        const string rideId = "RIDE-AGREEMENT-OPS-BOUNDARY";
+        const string adminKey = "integration-test-admin-key-32chars";
+
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", riderId);
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedAgreementRide(factory, rideId, riderId, driverId);
+
+        using var opsAsRider = factory.CreateClient("Ops", riderId);
+        using var opsAsDriver = factory.CreateClient("Ops", driverId);
+        opsAsRider.DefaultRequestHeaders.Add("X-Driver-Admin-Key", adminKey);
+        opsAsDriver.DefaultRequestHeaders.Add("X-Driver-Admin-Key", adminKey);
+
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var initialRide = rides[rideId];
+
+        static HttpRequestMessage Proposal(string rideId, string key, decimal amount)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/rides/{rideId}/agreements")
+            {
+                Content = JsonContent.Create(new { amount, currency = "INR" })
+            };
+            request.Headers.Add("Idempotency-Key", key);
+            return request;
+        }
+
+        using var deniedRiderProposalRequest = Proposal(rideId, "agreement-ops-rider-key", 250m);
+        using var deniedRiderProposal = await opsAsRider.SendAsync(deniedRiderProposalRequest);
+        using var deniedDriverProposalRequest = Proposal(rideId, "agreement-ops-driver-key", 300m);
+        using var deniedDriverProposal = await opsAsDriver.SendAsync(deniedDriverProposalRequest);
+        foreach (var denied in new[] { deniedRiderProposal, deniedDriverProposal })
+        {
+            Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode);
+            Assert.True(denied.Headers.CacheControl?.NoStore);
+            Assert.Contains(denied.Headers.Pragma, value =>
+                value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        }
+        Assert.Equal(initialRide, rides[rideId]);
+
+        // A real party can use the exact keys rejected for the same-subject Ops tokens.
+        using var riderProposalRequest = Proposal(rideId, "agreement-ops-rider-key", 250m);
+        using var riderProposal = await rider.SendAsync(riderProposalRequest);
+        Assert.Equal(HttpStatusCode.Created, riderProposal.StatusCode);
+        using var driverProposalRequest = Proposal(rideId, "agreement-ops-driver-key", 300m);
+        using var driverProposal = await driver.SendAsync(driverProposalRequest);
+        Assert.Equal(HttpStatusCode.Created, driverProposal.StatusCode);
+
+        using var opsRiderHistory = await opsAsRider.GetAsync($"/api/v1/rides/{rideId}/agreements");
+        using var opsDriverHistory = await opsAsDriver.GetAsync($"/api/v1/rides/{rideId}/agreements");
+        foreach (var denied in new[] { opsRiderHistory, opsDriverHistory })
+        {
+            Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode);
+            Assert.True(denied.Headers.CacheControl?.NoStore);
+            Assert.Contains(denied.Headers.Pragma, value =>
+                value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        }
+
+        var beforeDeniedConfirmation = rides[rideId];
+        using var deniedRiderConfirmation = await opsAsRider.PostAsync(
+            $"/api/v1/rides/{rideId}/agreements/2/confirm", content: null);
+        using var deniedDriverConfirmation = await opsAsDriver.PostAsync(
+            $"/api/v1/rides/{rideId}/agreements/2/confirm", content: null);
+        foreach (var denied in new[] { deniedRiderConfirmation, deniedDriverConfirmation })
+        {
+            Assert.Equal(HttpStatusCode.NotFound, denied.StatusCode);
+            Assert.True(denied.Headers.CacheControl?.NoStore);
+            Assert.Contains(denied.Headers.Pragma, value =>
+                value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        }
+        Assert.Equal(beforeDeniedConfirmation, rides[rideId]);
+        Assert.Empty(rides[rideId].AgreementConfirmations ?? []);
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await rider.PostAsync($"/api/v1/rides/{rideId}/agreements/2/confirm", content: null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await driver.PostAsync($"/api/v1/rides/{rideId}/agreements/2/confirm", content: null)).StatusCode);
+        var completedAgreement = rides[rideId];
+        Assert.Equal(2, completedAgreement.AgreementVersions?.Count);
+        Assert.Equal(new[] { "Driver", "Rider" },
+            completedAgreement.AgreementConfirmations?.Select(item => item.Party).OrderBy(item => item).ToArray());
+        Assert.DoesNotContain(completedAgreement.AuditEvents ?? [],
+            item => item.ActorRole == "Ops");
+    }
+
     [Theory]
     [InlineData(500.00, 400.00, 100.00)]
     [InlineData(500.00, 500.00, 0.00)]
@@ -7140,11 +8244,167 @@ public sealed partial class RideApiIntegrationTests
         using var firstRequest = CreatePaymentReportRequest(rideId, "payment-race-a", 400m);
         using var secondRequest = CreatePaymentReportRequest(rideId, "payment-race-b", 450m);
         var responses = await Task.WhenAll(driver.SendAsync(firstRequest), driver.SendAsync(secondRequest));
-        Assert.Single(responses.Where(response => response.StatusCode == HttpStatusCode.OK));
-        Assert.Single(responses.Where(response => response.StatusCode == HttpStatusCode.Conflict));
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.OK);
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Conflict);
         foreach (var response in responses) response.Dispose();
         Assert.Contains(factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>()[rideId]
             .PaymentReconciliation!.AmountReceived, new[] { 400m, 450m });
+    }
+
+    [Theory]
+    [InlineData("Rider")]
+    [InlineData("Driver")]
+    [InlineData("Ops")]
+    public async Task NonUnionRolesCannotAccessUnionOversightRoutesForSameDriverSubject(string role)
+    {
+        const string driverId = "union-oversight-private-driver";
+        const string unionId = "union-oversight-private-union";
+
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        using var rider = factory.CreateClient("Rider", "union-oversight-private-rider");
+        using var driver = factory.CreateClient("Driver", driverId);
+        SeedBookableDriver(factory, driverId, unionId);
+
+        var rideId = await CreateCompletedSelectedRideAsync(
+            factory, rider, driver, driverId, unionId, "union-oversight-private-booking", 500m);
+        using var reportRequest = CreatePaymentReportRequest(
+            rideId, "union-oversight-private-payment-report", 450m);
+        using var report = await driver.SendAsync(reportRequest);
+        Assert.Equal(HttpStatusCode.OK, report.StatusCode);
+
+        // The non-Union role deliberately shares the Driver subject and carries the
+        // matching unionId claim. Even an Operations token with its valid admin key
+        // must not cross into the separate UnionManager authorization boundary.
+        using var nonManager = factory.CreateClient(role, driverId, unionId);
+        if (role == "Ops")
+            nonManager.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+        using var manager = factory.CreateUnionManagerClient(unionId, "union-oversight-authorized-manager");
+
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var pendingProfile = profiles[driverId] with
+        {
+            ProfilePhotoApprovalStatus = "Pending",
+            ProfilePhotoApprovedByUnionId = null,
+            ProfilePhotoReviewedAtUtc = null,
+            ProfilePhotoReviewReason = null
+        };
+        profiles[driverId] = pendingProfile;
+
+        var assignments = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAssignment>>();
+        var assignmentBefore = assignments[driverId];
+        var unionAudit = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnionAuditEvent>>();
+        var auditBefore = unionAudit.Values.Where(item => item.DriverId == driverId).ToArray();
+        var rides = factory.Services.GetRequiredService<ConcurrentDictionary<string, DemoRide>>();
+        var rideBefore = rides[rideId];
+        var reservations = factory.Services.GetRequiredService<IDriverRideReservationStore>();
+        var reservationBefore = await reservations.GetActiveAsync(driverId);
+
+        using var memberList = await nonManager.GetAsync("/api/v1/union/drivers");
+        using var reconciliation = await nonManager.GetAsync("/api/v1/union/reconciliation");
+        using var privateDocument = await nonManager.GetAsync(
+            $"/api/v1/union/drivers/{driverId}/documents/DrivingLicence");
+        using var selfieReview = await nonManager.PutAsJsonAsync(
+            $"/api/v1/union/drivers/{driverId}/selfie-review",
+            new { status = "Approved", reason = (string?)null });
+
+        foreach (var denied in new[] { memberList, reconciliation, privateDocument, selfieReview })
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+            Assert.True(denied.Headers.CacheControl?.NoStore);
+            Assert.Contains(denied.Headers.Pragma, value =>
+                value.Name.Equals("no-cache", StringComparison.OrdinalIgnoreCase));
+        }
+
+        Assert.Equal(pendingProfile, profiles[driverId]);
+        Assert.Equal(assignmentBefore, assignments[driverId]);
+        Assert.Equal(auditBefore, unionAudit.Values.Where(item => item.DriverId == driverId).ToArray());
+        Assert.Equal(rideBefore, rides[rideId]);
+        Assert.Equal(reservationBefore, await reservations.GetActiveAsync(driverId));
+
+        // Positive controls prove that the scoped UnionManager still receives the
+        // member view and the minimal reconciliation projection for its own Union.
+        using var authorizedMembers = await manager.GetAsync("/api/v1/union/drivers");
+        Assert.Equal(HttpStatusCode.OK, authorizedMembers.StatusCode);
+        using var authorizedReconciliation = await manager.GetAsync("/api/v1/union/reconciliation");
+        Assert.Equal(HttpStatusCode.OK, authorizedReconciliation.StatusCode);
+        using var reconciliationJson = JsonDocument.Parse(
+            await authorizedReconciliation.Content.ReadAsStringAsync());
+        var authorizedRecord = Assert.Single(reconciliationJson.RootElement.EnumerateArray());
+        Assert.Equal(rideId, authorizedRecord.GetProperty("rideId").GetString());
+        Assert.Equal(unionId, authorizedRecord.GetProperty("unionId").GetString());
+    }
+
+    [Fact]
+    public async Task UnionManagerMemberListExcludesAssignmentsFromUnionsThatNoLongerServeCab()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string cabUnion = "union-manager-cab-serving";
+        const string nonCabUnion = "union-manager-non-cab";
+        const string cabDriver = "union-manager-cab-driver";
+        const string staleDriver = "union-manager-stale-cab-driver";
+
+        using var cabDriverClient = factory.CreateClient("Driver", cabDriver);
+        using var staleDriverClient = factory.CreateClient("Driver", staleDriver);
+        SeedBookableDriver(factory, cabDriver, cabUnion);
+        SeedBookableDriver(factory, staleDriver, nonCabUnion);
+        var unions = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>();
+        unions[nonCabUnion] = unions[nonCabUnion] with { ServiceClasses = ["scooty"] };
+
+        using var manager = factory.CreateUnionManagerClient(
+            new[] { cabUnion, nonCabUnion }, "union-manager-cab-scope");
+        using var response = await manager.GetAsync("/api/v1/union/drivers");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var members = await response.Content.ReadFromJsonAsync<List<JsonElement>>();
+        Assert.NotNull(members);
+        var member = Assert.Single(members);
+        Assert.Equal(cabDriver, member.GetProperty("driverId").GetString());
+        Assert.Equal(cabUnion, member.GetProperty("unionId").GetString());
+    }
+
+    [Fact]
+    public async Task UnionManagerWithMultipleSignedUnionClaimsSeesOnlyClaimedUnionDrivers()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string unionA = "multi-union-a";
+        const string unionB = "multi-union-b";
+        const string outsideUnion = "multi-union-outside";
+        const string driverA = "multi-union-driver-a";
+        const string driverB = "multi-union-driver-b";
+        const string outsideDriver = "multi-union-driver-outside";
+
+        using var driverAClient = factory.CreateClient("Driver", driverA);
+        using var driverBClient = factory.CreateClient("Driver", driverB);
+        using var outsideDriverClient = factory.CreateClient("Driver", outsideDriver);
+        SeedBookableDriver(factory, driverA, unionA);
+        SeedBookableDriver(factory, driverB, unionB);
+        SeedBookableDriver(factory, outsideDriver, outsideUnion);
+
+        using var manager = factory.CreateUnionManagerClient(
+            new[] { unionA, unionB }, "multi-union-manager");
+        using var response = await manager.GetAsync(
+            $"/api/v1/union/drivers?unionId={Uri.EscapeDataString(outsideUnion)}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var members = await response.Content.ReadFromJsonAsync<List<JsonElement>>();
+        Assert.NotNull(members);
+
+        var actualDriverIds = members
+            .Select(member => member.GetProperty("driverId").GetString()!)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(
+            new[] { driverA, driverB }.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            actualDriverIds);
+
+        var actualUnionIds = members
+            .Select(member => member.GetProperty("unionId").GetString()!)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(
+            new[] { unionA, unionB }.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            actualUnionIds);
+        Assert.DoesNotContain(actualDriverIds, value => value == outsideDriver);
     }
 
     [Fact]
@@ -8043,7 +9303,12 @@ private static async Task<TestRide> CreateRideAsync(HttpClient rider, string key
             }
         }
 
-        public HttpClient CreateClient(string role, string subject, string? unionId = null)
+        public HttpClient CreateClient(
+            string role,
+            string subject,
+            string? unionId = null,
+            string subjectClaimType = "sub",
+            IReadOnlyList<string>? unionIds = null)
         {
             var client = CreateClient(new WebApplicationFactoryClientOptions
             {
@@ -8051,7 +9316,7 @@ private static async Task<TestRide> CreateRideAsync(HttpClient rider, string key
                 BaseAddress = new Uri("https://localhost")
             });
             client.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", CreateToken(role, subject, unionId));
+                new AuthenticationHeaderValue("Bearer", CreateToken(role, subject, unionId, subjectClaimType, unionIds));
             if (role == "Driver")
             {
                 var profiles = Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
@@ -8071,22 +9336,32 @@ private static async Task<TestRide> CreateRideAsync(HttpClient rider, string key
             return client;
         }
 
-        public HttpClient CreateUnionManagerClient(string unionId, string subject) =>
-            CreateClient("UnionManager", subject, unionId);
+        public HttpClient CreateUnionManagerClient(string unionId, string subject, string subjectClaimType = "sub") =>
+            CreateClient("UnionManager", subject, unionId, subjectClaimType);
 
-        private static string CreateToken(string role, string subject, string? unionId)
+        public HttpClient CreateUnionManagerClient(
+            IReadOnlyList<string> unionIds, string subject, string subjectClaimType = "sub") =>
+            CreateClient("UnionManager", subject, subjectClaimType: subjectClaimType, unionIds: unionIds);
+
+        private static string CreateToken(
+            string role, string subject, string? unionId, string subjectClaimType, IReadOnlyList<string>? unionIds)
         {
             var credentials = new SigningCredentials(
                 new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SigningKey)),
                 SecurityAlgorithms.HmacSha256);
             var claims = new List<Claim>
             {
-                new("sub", subject),
+                new(subjectClaimType, subject),
                 new("role", role),
                 new("name", subject)
             };
             if (!string.IsNullOrWhiteSpace(unionId))
                 claims.Add(new Claim("unionId", unionId));
+            if (unionIds is not null)
+            {
+                foreach (var scopedUnionId in unionIds.Where(value => !string.IsNullOrWhiteSpace(value)))
+                    claims.Add(new Claim("unionId", scopedUnionId));
+            }
             var token = new JwtSecurityToken(
                 issuer: Issuer,
                 audience: Audience,

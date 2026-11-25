@@ -1,3 +1,4 @@
+using System.Collections;
 using TurnOva.API;
 using TurnOva.Application.Dispatch;
 using TurnOva.Infrastructure.Dispatch;
@@ -25,6 +26,43 @@ public sealed class DriverIdBatchingTests
         Assert.Equal(3, reservationQueries.Length);
         Assert.All(rideQueries, query => Assert.Equal(DriverActiveRideQuery.Sql, query.QueryText));
         Assert.All(reservationQueries, query => Assert.Equal(DriverRideReservationQuery.Sql, query.QueryText));
+    }
+
+    [Fact]
+    public void ChunkHonorsCancellationDuringDriverIdEnumeration()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var driverIds = new CancellingDriverIds(cancellation, yieldSecond: true);
+
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            DriverIdBatching.Chunk(driverIds, cancellation.Token));
+    }
+
+    [Fact]
+    public void ChunkHonorsCancellationAfterDriverIdEnumerationCompletes()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var driverIds = new CancellingDriverIds(cancellation, yieldSecond: false);
+
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            DriverIdBatching.Chunk(driverIds, cancellation.Token));
+    }
+
+    private sealed class CancellingDriverIds(
+        CancellationTokenSource cancellation,
+        bool yieldSecond) : IReadOnlyCollection<string>
+    {
+        public int Count => yieldSecond ? 2 : 1;
+
+        public IEnumerator<string> GetEnumerator()
+        {
+            yield return "driver-a";
+            cancellation.Cancel();
+            if (yieldSecond)
+                yield return "driver-b";
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
     [Fact]

@@ -6,12 +6,15 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Net.Http.Json;
+using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Azure.Cosmos;
 using Microsoft.IdentityModel.Tokens;
@@ -61,9 +64,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         var jwtSigningKey = builder.Configuration["Auth:Jwt:SigningKey"];
         if (string.IsNullOrWhiteSpace(jwtIssuer) || string.IsNullOrWhiteSpace(jwtAudience) ||
             string.IsNullOrWhiteSpace(jwtSigningKey) || jwtSigningKey.Length < 32)
-            throw new InvalidOperationException("Configure Auth:Jwt:Issuer, Auth:Jwt:Audience, and a signing key of at least 32 characters.");
+            throw new InvalidOperationException("Configure Auth:Jwt:Issuer, Auth:Jwt:Audience, and a 32+ character Auth:Jwt:SigningKey for TurnOva.");
 
         options.MapInboundClaims = false;
+        options.IncludeErrorDetails = false;
         options.Events = new JwtBearerEvents
         {
             OnMessageReceived = context =>
@@ -71,6 +75,58 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 var accessToken = context.Request.Query["access_token"];
                 if (!string.IsNullOrEmpty(accessToken) && context.HttpContext.Request.Path.StartsWithSegments("/hubs/rides"))
                     context.Token = accessToken;
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = context =>
+            {
+                var identities = context.Principal?.Identities.ToArray() ?? Array.Empty<ClaimsIdentity>();
+                if (identities.Length != 1)
+                {
+                    context.Fail("The token must contain exactly one authenticated identity.");
+                    return Task.CompletedTask;
+                }
+
+                var identity = identities[0];
+                var subjectClaims = identity.Claims
+                    .Where(claim =>
+                        claim.Type == ClaimTypes.NameIdentifier ||
+                        claim.Type == JwtRegisteredClaimNames.Sub ||
+                        string.Equals(claim.Type, "nameid", StringComparison.Ordinal))
+                    .ToArray();
+                var nonEmptySubjectClaims = subjectClaims
+                    .Where(claim => !string.IsNullOrWhiteSpace(claim.Value))
+                    .ToArray();
+                // Only the canonical role claim is authoritative. Reject common aliases
+                // as well so a token cannot carry competing role representations.
+                var roleClaims = identity.Claims
+                    .Where(claim =>
+                        string.Equals(claim.Type, "role", StringComparison.Ordinal) ||
+                        string.Equals(claim.Type, "roles", StringComparison.Ordinal) ||
+                        string.Equals(claim.Type, ClaimTypes.Role, StringComparison.Ordinal))
+                    .ToArray();
+                if (!identity.IsAuthenticated ||
+                    nonEmptySubjectClaims.Length > 1 ||
+                    roleClaims.Length != 1 ||
+                    !string.Equals(roleClaims[0].Type, "role", StringComparison.Ordinal) ||
+                    roleClaims[0].Value is not ("Rider" or "Driver" or "UnionManager" or "Ops"))
+                {
+                    context.Fail("The token must contain at most one non-empty subject and exactly one supported role claim.");
+                    return Task.CompletedTask;
+                }
+
+                // Inbound claim mapping stays disabled. Canonicalize the one non-empty
+                // subject to both claim names used by this API: sub for audit actor snapshots
+                // and NameIdentifier for ownership/SignalR user identity. Subject-less signed
+                // tokens remain limited to endpoints that deliberately permit IP fallback.
+                if (nonEmptySubjectClaims.Length == 1)
+                {
+                    var subject = nonEmptySubjectClaims[0].Value;
+                    foreach (var claim in subjectClaims)
+                        identity.RemoveClaim(claim);
+                    identity.AddClaim(new Claim(JwtRegisteredClaimNames.Sub, subject));
+                    identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, subject));
+                }
+
                 return Task.CompletedTask;
             }
         };
@@ -82,6 +138,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = jwtAudience,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKey)),
+            // TurnOva issues HS256 tokens; reject other otherwise-valid HMAC algorithms.
+            ValidAlgorithms = new[] { SecurityAlgorithms.HmacSha256 },
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromSeconds(30),
             RoleClaimType = "role",
@@ -97,7 +155,7 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
             !string.IsNullOrWhiteSpace(parameters.ValidAudience) &&
             parameters.IssuerSigningKey is SymmetricSecurityKey signingKey &&
             signingKey.KeySize >= 256;
-    }, "Configure Auth:Jwt:Issuer, Auth:Jwt:Audience, and a signing key of at least 32 characters.")
+    }, "Configure Auth:Jwt:Issuer, Auth:Jwt:Audience, and a 32+ character Auth:Jwt:SigningKey for TurnOva.")
     .ValidateOnStart();
 builder.Services.AddAuthorization();
 if (builder.Environment.IsEnvironment("Testing"))
@@ -174,6 +232,18 @@ if (useCosmos)
 else
 {
     var queueStore = new InMemoryQueueStore();
+    if (builder.Environment.IsDevelopment())
+    {
+        var demoDrivers = new[]
+        {
+            new DriverQueueEntry("DRV-1001", "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-28), 0, true),
+            new DriverQueueEntry("DRV-1002", "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-18), 0, true),
+            new DriverQueueEntry("DRV-1003", "hyderabad-central", "cab", DateTimeOffset.UtcNow.AddMinutes(-9), 0, true)
+        };
+        foreach (var driver in demoDrivers)
+            await queueStore.AddAsync(driver, CancellationToken.None);
+    }
+
     builder.Services.AddSingleton<IQueueStore>(queueStore);
     builder.Services.AddSingleton<IRideOfferStore, InMemoryRideOfferStore>();
     builder.Services.AddSingleton<IDriverRideReservationStore, InMemoryDriverRideReservationStore>();
@@ -220,7 +290,6 @@ builder.Services.AddSingleton<IRideOfferExpiryProcessor, RideOfferExpiryProcesso
 builder.Services.Configure<DispatchOfferExpiryOptions>(builder.Configuration.GetSection("Dispatch:OfferExpiry"));
 builder.Services.AddHostedService<RideOfferExpiryWorker>();
 builder.Services.AddScoped<QueueService>();
-
 builder.Services.AddSingleton<CosmosIdentityService>();
 
 var app = builder.Build();
@@ -244,8 +313,6 @@ if (useCosmos)
     await app.Services.GetRequiredService<CosmosMigrationRunner>().RunAsync();
 }
 
-app.UseCors();
-
 app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
 {
     var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
@@ -259,11 +326,48 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
         .ExecuteAsync(context);
 }));
 
+// API and realtime responses can contain private profile/ride data, auth tokens or
+// SignalR connection credentials. Keep health checks and development OpenAPI outside this policy.
+app.UseApiResponseCachePolicy();
+// CORS preflight can short-circuit the pipeline, so keep it inside the auth cache policy.
+// Keep CORS before HTTPS redirection so Development preflight requests are not redirected.
+app.UseCors();
 if (app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
 app.UseAuthentication();
+// Application ownership, Union audit and SignalR user identity require a canonical subject.
+// Only the AI assistance group opts into subject-less, server-IP-partitioned rate limiting.
+// Public auth endpoints remain usable when a stale/subject-less bearer happens to be present.
+app.Use(async (context, next) =>
+{
+    var endpoint = context.GetEndpoint();
+    var allowsAnonymous = endpoint?.Metadata.GetMetadata<IAllowAnonymous>() is not null;
+    var allowsSubjectless = endpoint?.Metadata.GetMetadata<AllowSubjectlessPrincipalMetadata>() is not null;
+    var requiresAuthorization = endpoint is not null &&
+        endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>().Count > 0;
+    var isApiOrRealtime = context.Request.Path.StartsWithSegments("/api/v1") ||
+                         context.Request.Path.StartsWithSegments("/hubs/rides");
+    var hasCanonicalSubject = !string.IsNullOrWhiteSpace(
+        context.User.FindFirstValue(JwtRegisteredClaimNames.Sub));
+
+    if (isApiOrRealtime &&
+        endpoint is not null &&
+        requiresAuthorization &&
+        !allowsAnonymous &&
+        !allowsSubjectless &&
+        context.User.Identity?.IsAuthenticated == true &&
+        !hasCanonicalSubject)
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsJsonAsync(
+            new { message = "A subject claim is required for this endpoint." });
+        return;
+    }
+
+    await next();
+});
 app.UseAuthorization();
 app.UseRateLimiter();
 if (OpenApiEndpointPolicy.IsEnabled(app.Environment.EnvironmentName))
@@ -279,6 +383,24 @@ if (app.Environment.IsEnvironment("Testing"))
     {
         throw new InvalidOperationException("sensitive-test-exception");
     }).ExcludeFromDescription();
+
+    app.MapGet("/api/v1/auth/__test/throw", () =>
+    {
+        throw new InvalidOperationException("sensitive-auth-test-exception");
+    }).ExcludeFromDescription();
+
+    app.MapGet("/api/v1/__test/throw", () =>
+    {
+        throw new InvalidOperationException("sensitive-api-test-exception");
+    }).ExcludeFromDescription();
+
+    app.MapGet("/api/v1/auth/__test/private-cache", (HttpContext context) =>
+    {
+        context.Response.Headers["Cache-Control"] = "private, max-age=60";
+        return Results.Ok(new { status = "ok" });
+    }).ExcludeFromDescription();
+
+
 }
 app.MapHub<RideTrackingHub>("/hubs/rides").RequireAuthorization();
 app.MapAiAssistanceEndpoints();
@@ -317,7 +439,13 @@ async Task RecordWorkActivityAsync(string driverId, string rideId, string activi
         workActivities.TryAdd($"{driverId}|{activityId}", activity);
         return;
     }
-    try { await workActivityContainer.CreateItemAsync(activity, new PartitionKey(driverId), cancellationToken: ct); }
+    try
+    {
+        _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+            () => workActivityContainer.CreateItemAsync(
+                activity, new PartitionKey(driverId), cancellationToken: ct),
+            ct);
+    }
     catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict) { }
 }
 
@@ -330,7 +458,14 @@ async Task<IReadOnlyList<DriverWorkActivity>> GetWorkActivitiesAsync(string driv
     var results = new List<DriverWorkActivity>();
     using var iterator = workActivityContainer.GetItemQueryIterator<DriverWorkActivity>(query,
         requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(driverId) });
-    while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
+    while (CosmosReadResponseGuard.ReadHasMoreResults(iterator, ct))
+    {
+        var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+            () => iterator.ReadNextAsync(ct),
+            ct);
+        results.AddRange(CosmosReadResponseGuard.ReadPageItems(page, ct));
+        ct.ThrowIfCancellationRequested();
+    }
     return results;
 }
 
@@ -350,8 +485,14 @@ async Task ReconcileSelectedRideWorkActivitiesAsync(
         var query = new QueryDefinition("SELECT * FROM c WHERE c.driverId = @driverId")
             .WithParameter("@driverId", driverId);
         using var iterator = rideContainer.GetItemQueryIterator<DemoRide>(query);
-        while (iterator.HasMoreResults)
-            driverRides.AddRange(await iterator.ReadNextAsync(ct));
+        while (CosmosReadResponseGuard.ReadHasMoreResults(iterator, ct))
+        {
+            var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => iterator.ReadNextAsync(ct),
+                ct);
+            driverRides.AddRange(CosmosReadResponseGuard.ReadPageItems(page, ct));
+            ct.ThrowIfCancellationRequested();
+        }
     }
 
     foreach (var ride in driverRides)
@@ -392,9 +533,22 @@ async Task ReconcileSelectedRideWorkActivitiesAsync(
 
 async Task<DriverMonthlyPayslip?> FindPayslipAsync(string driverId, string payslipId, CancellationToken ct)
 {
-    if (payslipContainer is null)
+    var container = payslipContainer;
+    if (container is null)
         return monthlyPayslips.TryGetValue($"{driverId}|{payslipId}", out var value) ? value : null;
-    try { return (await payslipContainer.ReadItemAsync<DriverMonthlyPayslip>(payslipId, new PartitionKey(driverId), cancellationToken: ct)).Resource; }
+    try
+    {
+        var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+            () => container.ReadItemAsync<DriverMonthlyPayslip>(
+                payslipId, new PartitionKey(driverId), cancellationToken: ct),
+            ct);
+        return CosmosReadResponseGuard.ReadResource(
+            response,
+            item => string.Equals(item.PayslipId, payslipId, StringComparison.Ordinal) &&
+                string.Equals(item.DriverId, driverId, StringComparison.Ordinal),
+            "Driver payslip",
+            ct);
+    }
     catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
 }
 
@@ -405,7 +559,10 @@ async Task<DriverMonthlyPayslip> SavePayslipIfAbsentAsync(DriverMonthlyPayslip p
 
     try
     {
-        await payslipContainer.CreateItemAsync(payslip, new PartitionKey(payslip.DriverId), cancellationToken: ct);
+        _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+            () => payslipContainer.CreateItemAsync(
+                payslip, new PartitionKey(payslip.DriverId), cancellationToken: ct),
+            ct);
         return payslip;
     }
     catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
@@ -512,17 +669,37 @@ bool IsUnionManagerFor(ClaimsPrincipal user, string unionId) =>
     user.IsInRole("UnionManager") &&
     user.FindAll("unionId").Any(claim => string.Equals(claim.Value, unionId, StringComparison.Ordinal));
 
+static bool HasValidUnionCoverageCollections(DriverUnion union) =>
+    union.ZoneIds is not null && union.ServiceClasses is not null;
+
 async Task<DriverUnion?> FindUnionAsync(string unionId, CancellationToken ct)
 {
-    if (unionContainer is null) return unions.TryGetValue(unionId, out var value) ? value : null;
-    try { return (await unionContainer.ReadItemAsync<DriverUnion>(unionId, new PartitionKey(unionId), cancellationToken: ct)).Resource; }
-    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
-}
+    ct.ThrowIfCancellationRequested();
+    if (unionContainer is null)
+    {
+        if (!unions.TryGetValue(unionId, out var value) ||
+            !HasValidUnionCoverageCollections(value))
+            return null;
 
-async Task SaveUnionAsync(DriverUnion union, CancellationToken ct)
-{
-    if (unionContainer is null) { unions[union.UnionId] = union; return; }
-    await unionContainer.UpsertItemAsync(union, new PartitionKey(union.UnionId), cancellationToken: ct);
+        return CosmosReadResponseGuard.RequireResource(
+            value,
+            item => string.Equals(item.UnionId, unionId, StringComparison.Ordinal),
+            "Union");
+    }
+
+    var persisted = await CosmosReadResponseGuard.ReadItemAsync<DriverUnion>(
+        unionContainer,
+        unionId,
+        new PartitionKey(unionId),
+        item => string.Equals(item.UnionId, unionId, StringComparison.Ordinal),
+        "Union",
+        ct);
+
+    // Zone/service collections are required by every eligibility path. Treat a
+    // malformed persisted Union as unavailable rather than dereferencing null.
+    return persisted is not null && HasValidUnionCoverageCollections(persisted)
+        ? persisted
+        : null;
 }
 
 static string NormalizeUnionCode(string? code) =>
@@ -536,31 +713,48 @@ Task<bool> TryCreateUnionIfAbsentAsync(DriverUnion union, CancellationToken ct) 
 
 async Task<DriverUnionAssignment?> FindUnionAssignmentAsync(string driverId, CancellationToken ct)
 {
-    if (unionAssignmentContainer is null) return unionAssignments.TryGetValue(driverId, out var value) ? value : null;
-    try { return (await unionAssignmentContainer.ReadItemAsync<DriverUnionAssignment>(driverId, new PartitionKey(driverId), cancellationToken: ct)).Resource; }
-    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
-}
+    ct.ThrowIfCancellationRequested();
+    if (unionAssignmentContainer is null)
+    {
+        if (!unionAssignments.TryGetValue(driverId, out var value)) return null;
+        return CosmosReadResponseGuard.RequireResource(
+            value,
+            item => string.Equals(item.DriverId, driverId, StringComparison.Ordinal) &&
+                !string.IsNullOrWhiteSpace(item.UnionId),
+            "Driver Union assignment");
+    }
 
-async Task SaveUnionAssignmentAsync(DriverUnionAssignment assignment, CancellationToken ct)
-{
-    if (unionAssignmentContainer is null) { unionAssignments[assignment.DriverId] = assignment; return; }
-    await unionAssignmentContainer.UpsertItemAsync(assignment, new PartitionKey(assignment.DriverId), cancellationToken: ct);
+    return await CosmosReadResponseGuard.ReadItemAsync<DriverUnionAssignment>(
+        unionAssignmentContainer,
+        driverId,
+        new PartitionKey(driverId),
+        item => string.Equals(item.DriverId, driverId, StringComparison.Ordinal) &&
+            !string.IsNullOrWhiteSpace(item.UnionId),
+        "Driver Union assignment",
+        ct);
 }
 
 async Task<DriverUnionAuditEvent?> FindUnionAuditEventAsync(string driverId, string eventId, CancellationToken ct)
 {
+    ct.ThrowIfCancellationRequested();
     if (unionAuditContainer is null)
-        return unionAudit.TryGetValue(driverId + "|" + eventId, out var value) ? value : null;
+    {
+        if (!unionAudit.TryGetValue(driverId + "|" + eventId, out var value)) return null;
+        return CosmosReadResponseGuard.RequireResource(
+            value,
+            item => string.Equals(item.DriverId, driverId, StringComparison.Ordinal) &&
+                string.Equals(item.EventId, eventId, StringComparison.Ordinal),
+            "Driver Union audit event");
+    }
 
-    try
-    {
-        return (await unionAuditContainer.ReadItemAsync<DriverUnionAuditEvent>(
-            eventId, new PartitionKey(driverId), cancellationToken: ct)).Resource;
-    }
-    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-    {
-        return null;
-    }
+    return await CosmosReadResponseGuard.ReadItemAsync<DriverUnionAuditEvent>(
+        unionAuditContainer,
+        eventId,
+        new PartitionKey(driverId),
+        item => string.Equals(item.DriverId, driverId, StringComparison.Ordinal) &&
+            string.Equals(item.EventId, eventId, StringComparison.Ordinal),
+        "Driver Union audit event",
+        ct);
 }
 
 void RecordUnionAuditOutcome(Activity? activity, string? eventType, string outcome)
@@ -599,7 +793,10 @@ async Task SaveUnionAuditAsync(DriverUnionAuditEvent audit, CancellationToken ct
 
         try
         {
-            await unionAuditContainer.CreateItemAsync(audit, new PartitionKey(audit.DriverId), cancellationToken: ct);
+            _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => unionAuditContainer.CreateItemAsync(
+                    audit, new PartitionKey(audit.DriverId), cancellationToken: ct),
+                ct);
             RecordUnionAuditOutcome(activity, audit.EventType, "success");
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
@@ -754,15 +951,22 @@ async Task TryCompleteUnionAssignmentAuditSnapshotAsync(
         ItemResponse<DriverUnionAssignment> response;
         try
         {
-            response = await unionAssignmentContainer.ReadItemAsync<DriverUnionAssignment>(
-                assignment.DriverId, new PartitionKey(assignment.DriverId), cancellationToken: ct);
+            response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => unionAssignmentContainer!.ReadItemAsync<DriverUnionAssignment>(
+                    assignment.DriverId, new PartitionKey(assignment.DriverId), cancellationToken: ct),
+                ct);
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             throw new InvalidOperationException("The Union assignment disappeared before its audit snapshot could be completed.");
         }
 
-        var current = response.Resource;
+        var current = CosmosReadResponseGuard.ReadResource(
+            response,
+            item => string.Equals(item.DriverId, assignment.DriverId, StringComparison.Ordinal) &&
+                string.Equals(item.id, assignment.DriverId, StringComparison.Ordinal),
+            "Union assignment",
+            ct);
         if (!string.Equals(current.AuditEventId, expected.EventId, StringComparison.Ordinal))
             return;
         if (!current.AuditSnapshotPending)
@@ -776,11 +980,18 @@ async Task TryCompleteUnionAssignmentAuditSnapshotAsync(
         if (!DriverUnionAuditSnapshotRecovery.Matches(expected, currentExpected))
             throw new InvalidOperationException("The Union assignment audit snapshot changed before completion. Refusing to clear it.");
 
+        var etag = CosmosReadResponseGuard.ReadResponseEtag(
+            response, static itemResponse => itemResponse.ETag, ct);
+        if (!CosmosEtagPolicy.HasObservedEtag(etag))
+            throw new InvalidOperationException("The Union assignment cannot be safely completed without an observed Cosmos ETag.");
+
         try
         {
-            await unionAssignmentContainer.ReplaceItemAsync(
-                Complete(current), current.id, new PartitionKey(current.DriverId),
-                new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
+            _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => unionAssignmentContainer!.ReplaceItemAsync(
+                    Complete(current), current.id, new PartitionKey(current.DriverId),
+                    new ItemRequestOptions { IfMatchEtag = etag }, ct),
+                ct);
             return;
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
@@ -816,72 +1027,175 @@ DriverUnionAssignment ToDriverUnionAssignmentResponse(DriverUnionAssignment assi
 
 async Task<IReadOnlyList<DriverUnion>> ListUnionsAsync(CancellationToken ct)
 {
-    if (unionContainer is null) return unions.Values.OrderBy(item => item.Name).ToArray();
-    var results = new List<DriverUnion>();
+    ct.ThrowIfCancellationRequested();
+    if (unionContainer is null)
+    {
+        var inMemoryResults = new List<DriverUnion>();
+        foreach (var pair in unions.ToArray())
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!HasValidUnionCoverageCollections(pair.Value))
+                continue;
+
+            inMemoryResults.Add(CosmosReadResponseGuard.RequireResource(
+                pair.Value,
+                item => string.Equals(pair.Key, item.UnionId, StringComparison.Ordinal),
+                "Union"));
+        }
+
+        return inMemoryResults.OrderBy(item => item.Name).ToArray();
+    }
+
     using var iterator = unionContainer.GetItemQueryIterator<DriverUnion>(new QueryDefinition("SELECT * FROM c"));
-    while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
-    return results.OrderBy(item => item.Name).ToArray();
+    var results = await CosmosReadResponseGuard.ReadAllAsync(
+        iterator,
+        item => !string.IsNullOrWhiteSpace(item.UnionId),
+        "Union",
+        ct);
+    return results
+        .Where(HasValidUnionCoverageCollections)
+        .OrderBy(item => item.Name)
+        .ToArray();
 }
 
 async Task<IReadOnlyList<DriverOnboardingProfile>> ListOnlineCabProfilesForDiscoveryAsync(string zoneId, CancellationToken ct)
 {
+    ct.ThrowIfCancellationRequested();
     if (driverContainer is null)
-        return driverProfiles.Values.Where(profile =>
-            profile.Status == "Approved" &&
-            profile.AvailabilityStatus == "Online" &&
-            string.Equals(profile.ZoneId, zoneId, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase)).ToArray();
+    {
+        var inMemoryResults = new List<DriverOnboardingProfile>();
+        foreach (var pair in driverProfiles.ToArray())
+        {
+            ct.ThrowIfCancellationRequested();
+            var profile = pair.Value;
+            if (profile.Status != "Approved" ||
+                profile.AvailabilityStatus != "Online" ||
+                !string.Equals(profile.ZoneId, zoneId, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            inMemoryResults.Add(CosmosReadResponseGuard.RequireResource(
+                profile,
+                item => string.Equals(pair.Key, item.DriverId, StringComparison.Ordinal) &&
+                    string.Equals(item.Id, item.DriverId, StringComparison.Ordinal) &&
+                    string.Equals(item.ZoneId, zoneId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(item.Status, "Approved", StringComparison.Ordinal) &&
+                    string.Equals(item.AvailabilityStatus, "Online", StringComparison.Ordinal) &&
+                    string.Equals(item.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase),
+                "eligible Cab driver profile"));
+        }
+
+        return inMemoryResults;
+    }
 
     var query = new QueryDefinition(
         "SELECT * FROM c WHERE c.zoneId = @zoneId AND c.status = 'Approved' AND c.availabilityStatus = 'Online' AND c.serviceClass = 'cab'")
         .WithParameter("@zoneId", zoneId);
-    var results = new List<DriverOnboardingProfile>();
     using var iterator = driverContainer.GetItemQueryIterator<DriverOnboardingProfile>(query);
-    while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
-    return results;
+    return await CosmosReadResponseGuard.ReadAllAsync(
+        iterator,
+        item => !string.IsNullOrWhiteSpace(item.DriverId) &&
+            string.Equals(item.Id, item.DriverId, StringComparison.Ordinal) &&
+            string.Equals(item.ZoneId, zoneId, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(item.Status, "Approved", StringComparison.Ordinal) &&
+            string.Equals(item.AvailabilityStatus, "Online", StringComparison.Ordinal) &&
+            string.Equals(item.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase),
+        "eligible Cab driver profile",
+        ct);
 }
 
 async Task<IReadOnlyList<DriverUnionAssignment>> ListActiveUnionAssignmentsAsync(CancellationToken ct)
 {
+    ct.ThrowIfCancellationRequested();
     if (unionAssignmentContainer is null)
-        return unionAssignments.Values.Where(item => item.Status == "Active").ToArray();
+    {
+        var inMemoryResults = new List<DriverUnionAssignment>();
+        foreach (var pair in unionAssignments.ToArray())
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!string.Equals(pair.Value.Status, "Active", StringComparison.Ordinal)) continue;
+            inMemoryResults.Add(CosmosReadResponseGuard.RequireResource(
+                pair.Value,
+                item => string.Equals(pair.Key, item.DriverId, StringComparison.Ordinal) &&
+                    !string.IsNullOrWhiteSpace(item.UnionId) &&
+                    string.Equals(item.Status, "Active", StringComparison.Ordinal),
+                "active Driver Union assignment"));
+        }
+
+        return inMemoryResults;
+    }
 
     var query = new QueryDefinition("SELECT * FROM c WHERE c.status = 'Active'");
-    var results = new List<DriverUnionAssignment>();
     using var iterator = unionAssignmentContainer.GetItemQueryIterator<DriverUnionAssignment>(query);
-    while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
-    return results;
+    return await CosmosReadResponseGuard.ReadAllAsync(
+        iterator,
+        item => !string.IsNullOrWhiteSpace(item.DriverId) &&
+            !string.IsNullOrWhiteSpace(item.UnionId) &&
+            string.Equals(item.Status, "Active", StringComparison.Ordinal),
+        "active Driver Union assignment",
+        ct);
 }
 
 async Task<IReadOnlyList<DriverUnionAuditEvent>> GetUnionAuditAsync(string driverId, CancellationToken ct)
 {
+    ct.ThrowIfCancellationRequested();
     // The current assignment retains the latest event snapshot so an audit write that
     // failed after assignment persistence can be repaired before history is returned.
     var currentAssignment = await FindUnionAssignmentAsync(driverId, ct);
     if (currentAssignment is not null)
         await EnsureUnionAssignmentAuditAsync(currentAssignment, ct);
 
-    if (unionAuditContainer is null) return unionAudit.Values.Where(item => item.DriverId == driverId).OrderByDescending(item => item.OccurredAtUtc).ToArray();
+    if (unionAuditContainer is null)
+    {
+        var inMemoryResults = new List<DriverUnionAuditEvent>();
+        foreach (var pair in unionAudit.ToArray())
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!string.Equals(pair.Value.DriverId, driverId, StringComparison.Ordinal)) continue;
+            inMemoryResults.Add(CosmosReadResponseGuard.RequireResource(
+                pair.Value,
+                item => string.Equals(item.DriverId, driverId, StringComparison.Ordinal) &&
+                    !string.IsNullOrWhiteSpace(item.EventId),
+                "Driver Union audit event"));
+        }
+
+        return inMemoryResults.OrderByDescending(item => item.OccurredAtUtc).ToArray();
+    }
+
     var query = new QueryDefinition("SELECT * FROM c WHERE c.driverId = @driverId").WithParameter("@driverId", driverId);
-    var results = new List<DriverUnionAuditEvent>();
-    using var iterator = unionAuditContainer.GetItemQueryIterator<DriverUnionAuditEvent>(query, requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(driverId) });
-    while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
+    using var iterator = unionAuditContainer.GetItemQueryIterator<DriverUnionAuditEvent>(
+        query,
+        requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(driverId) });
+    var results = await CosmosReadResponseGuard.ReadAllAsync(
+        iterator,
+        item => string.Equals(item.DriverId, driverId, StringComparison.Ordinal) &&
+            !string.IsNullOrWhiteSpace(item.EventId),
+        "Driver Union audit event",
+        ct);
     return results.OrderByDescending(item => item.OccurredAtUtc).ToArray();
 }
 
 async Task<DriverOnboardingProfile?> FindDriverProfileAsync(string driverId, CancellationToken ct)
 {
+    ct.ThrowIfCancellationRequested();
     if (driverContainer is null)
-        return driverProfiles.TryGetValue(driverId, out var profile) ? profile : null;
-    try
     {
-        return (await driverContainer.ReadItemAsync<DriverOnboardingProfile>(driverId,
-            new PartitionKey(driverId), cancellationToken: ct)).Resource;
+        if (!driverProfiles.TryGetValue(driverId, out var profile)) return null;
+        return CosmosReadResponseGuard.RequireResource(
+            profile,
+            item => string.Equals(item.Id, driverId, StringComparison.Ordinal) &&
+                string.Equals(item.DriverId, driverId, StringComparison.Ordinal),
+            "Driver onboarding profile");
     }
-    catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-    {
-        return null;
-    }
+
+    return await CosmosReadResponseGuard.ReadItemAsync<DriverOnboardingProfile>(
+        driverContainer,
+        driverId,
+        new PartitionKey(driverId),
+        item => string.Equals(item.Id, driverId, StringComparison.Ordinal) &&
+            string.Equals(item.DriverId, driverId, StringComparison.Ordinal),
+        "Driver onboarding profile",
+        ct);
 }
 
 async Task<bool> TryCreateDriverProfileAsync(DriverOnboardingProfile profile, CancellationToken ct)
@@ -891,7 +1205,10 @@ async Task<bool> TryCreateDriverProfileAsync(DriverOnboardingProfile profile, Ca
 
     try
     {
-        await driverContainer.CreateItemAsync(profile, new PartitionKey(profile.DriverId), cancellationToken: ct);
+        _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+            () => driverContainer.CreateItemAsync(
+                profile, new PartitionKey(profile.DriverId), cancellationToken: ct),
+            ct);
         return true;
     }
     catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
@@ -925,23 +1242,38 @@ async Task<bool> TryUpdateDriverProfileAsync(
         ItemResponse<DriverOnboardingProfile> response;
         try
         {
-            response = await driverContainer.ReadItemAsync<DriverOnboardingProfile>(
-                driverId, new PartitionKey(driverId), cancellationToken: ct);
+            response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => driverContainer!.ReadItemAsync<DriverOnboardingProfile>(
+                    driverId, new PartitionKey(driverId), cancellationToken: ct),
+                ct);
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             return false;
         }
 
-        var updated = update(response.Resource);
+        var profile = CosmosReadResponseGuard.ReadResource(
+            response,
+            item => string.Equals(item.Id, driverId, StringComparison.Ordinal) &&
+                string.Equals(item.DriverId, driverId, StringComparison.Ordinal),
+            "Driver profile",
+            ct);
+        var updated = update(profile);
         if (updated is null)
+            return false;
+
+        var etag = CosmosReadResponseGuard.ReadResponseEtag(
+            response, static itemResponse => itemResponse.ETag, ct);
+        if (!CosmosEtagPolicy.HasObservedEtag(etag))
             return false;
 
         try
         {
-            await driverContainer.ReplaceItemAsync(
-                updated, driverId, new PartitionKey(driverId),
-                new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
+            _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => driverContainer!.ReplaceItemAsync(
+                    updated, driverId, new PartitionKey(driverId),
+                    new ItemRequestOptions { IfMatchEtag = etag }, ct),
+                ct);
             return true;
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
@@ -980,7 +1312,10 @@ async Task<bool> TryCreateRideAsync(DemoRide ride, CancellationToken ct)
         {
             try
             {
-                await rideContainer.CreateItemAsync(ride, new PartitionKey(ride.RideId), cancellationToken: ct);
+                _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                    () => rideContainer.CreateItemAsync(
+                        ride, new PartitionKey(ride.RideId), cancellationToken: ct),
+                    ct);
                 created = true;
             }
             catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
@@ -1023,8 +1358,12 @@ async Task<DemoRide?> ReadRideRawAsync(string rideId, CancellationToken ct)
     {
         try
         {
-            item = (await rideContainer.ReadItemAsync<DemoRide>(
-                rideId, new PartitionKey(rideId), cancellationToken: ct)).Resource;
+            var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => rideContainer!.ReadItemAsync<DemoRide>(
+                    rideId, new PartitionKey(rideId), cancellationToken: ct),
+                ct);
+            item = CosmosReadResponseGuard.ReadResponseValue(
+                response, static itemResponse => itemResponse.Resource, ct);
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
@@ -1179,8 +1518,14 @@ async Task<HashSet<string>> FindActiveDriverIdsAsync(
         {
             using var iterator = rideContainer.GetItemQueryIterator<ActiveDriverRideProjection>(
                 DriverActiveRideQuery.Create(batch));
-            while (iterator.HasMoreResults)
-                candidates.AddRange(await iterator.ReadNextAsync(ct));
+            while (CosmosReadResponseGuard.ReadHasMoreResults(iterator, ct))
+            {
+                var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                    () => iterator.ReadNextAsync(ct),
+                    ct);
+                candidates.AddRange(CosmosReadResponseGuard.ReadPageItems(page, ct));
+                ct.ThrowIfCancellationRequested();
+            }
         }
 
         foreach (var candidate in candidates)
@@ -1243,8 +1588,14 @@ async Task<DemoRide?> FindActiveRiderRideAsync(
             .WithParameter("@riderId", riderId);
         var ids = new List<string>();
         using var iterator = rideContainer.GetItemQueryIterator<string>(query);
-        while (iterator.HasMoreResults)
-            ids.AddRange(await iterator.ReadNextAsync(ct));
+        while (CosmosReadResponseGuard.ReadHasMoreResults(iterator, ct))
+        {
+            var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => iterator.ReadNextAsync(ct),
+                ct);
+            ids.AddRange(CosmosReadResponseGuard.ReadPageItems(page, ct));
+            ct.ThrowIfCancellationRequested();
+        }
         candidateRideIds = ids.Distinct(StringComparer.Ordinal).ToArray();
     }
 
@@ -1425,20 +1776,18 @@ app.MapGet("/health/ready", async (StorageReadinessProbe storageReadiness, Cance
 
 
 var authGroup = app.MapGroup("/api/v1/auth").WithTags("Authentication");
-authGroup.MapPost("/{role}/register", async (
-    string role, CosmosRegisterRequest request, CosmosIdentityService identity, CancellationToken ct) =>
-    await identity.RegisterAsync(role, request, ct)).AllowAnonymous();
-authGroup.MapPost("/{role}/login", async (
-    string role, CosmosLoginRequest request, CosmosIdentityService identity, CancellationToken ct) =>
-    await identity.LoginAsync(role, request, ct)).AllowAnonymous();
-authGroup.MapPost("/refresh", async (
-    CosmosRefreshRequest? request, CosmosIdentityService identity, CancellationToken ct) =>
-    await identity.RefreshAsync(request, ct)).AllowAnonymous();
-authGroup.MapPost("/logout", async (
-    ClaimsPrincipal principal, CosmosIdentityService identity, CancellationToken ct) =>
+authGroup.MapPost("/{role}/register", async (string role, CosmosRegisterRequest request, CosmosIdentityService identity, CancellationToken ct) =>
+    await identity.RegisterAsync(role, request, ct))
+    .AllowAnonymous().RequireRateLimiting(AiAssistanceEndpoints.PublicAuthRateLimitPolicyName);
+authGroup.MapPost("/{role}/login", async (string role, CosmosLoginRequest request, CosmosIdentityService identity, CancellationToken ct) =>
+    await identity.LoginAsync(role, request, ct))
+    .AllowAnonymous().RequireRateLimiting(AiAssistanceEndpoints.PublicAuthRateLimitPolicyName);
+authGroup.MapPost("/refresh", async (CosmosRefreshRequest? request, CosmosIdentityService identity, CancellationToken ct) =>
+    await identity.RefreshAsync(request, ct))
+    .AllowAnonymous().RequireRateLimiting(AiAssistanceEndpoints.PublicAuthRateLimitPolicyName);
+authGroup.MapPost("/logout", async (ClaimsPrincipal principal, CosmosIdentityService identity, CancellationToken ct) =>
     await identity.LogoutAsync(principal, ct)).RequireAuthorization();
-authGroup.MapGet("/me", (ClaimsPrincipal principal) => CosmosIdentityService.Me(principal))
-    .RequireAuthorization();
+authGroup.MapGet("/me", (ClaimsPrincipal principal) => CosmosIdentityService.Me(principal)).RequireAuthorization();
 
 var onboarding = app.MapGroup("/api/v1/driver/onboarding").RequireAuthorization(policy => policy.RequireRole("Driver")).WithTags("Driver onboarding");
 onboarding.MapGet("/me", async (ClaimsPrincipal user, CancellationToken ct) =>
@@ -1944,11 +2293,17 @@ opsUnions.MapPut("/{unionId}/status", async (HttpContext context, string unionId
     if (!IsOpsAuthorized(context)) return Results.Unauthorized();
     if (request.Status is not ("Active" or "Inactive" or "Suspended"))
         return Results.BadRequest(new { message = "Status must be Active, Inactive or Suspended." });
-    var union = await FindUnionAsync(unionId, ct);
-    if (union is null) return Results.NotFound();
-    var updated = union with { Status = request.Status, UpdatedAtUtc = DateTimeOffset.UtcNow };
-    await SaveUnionAsync(updated, ct);
-    return Results.Ok(updated);
+    var update = await UnionStatusUpdater.TryUpdateStatusAsync(
+        unionContainer, unions, unionId, request.Status, DateTimeOffset.UtcNow, ct);
+    if (update.Outcome == UnionStatusUpdateOutcome.Updated)
+        return Results.Ok(update.Union);
+    if (update.Outcome == UnionStatusUpdateOutcome.NotFound)
+        return Results.NotFound();
+
+    return Results.Conflict(new
+    {
+        message = "Union changed while its status was being updated. Refresh and retry."
+    });
 });
 
 opsUnions.MapGet("/{unionId}/drivers", async (HttpContext context, string unionId, CancellationToken ct) =>
@@ -1964,7 +2319,14 @@ opsUnions.MapGet("/{unionId}/drivers", async (HttpContext context, string unionI
         var query = new QueryDefinition("SELECT * FROM c WHERE c.unionId = @unionId AND c.status = 'Active'").WithParameter("@unionId", unionId);
         var results = new List<DriverUnionAssignment>();
         using var iterator = unionAssignmentContainer.GetItemQueryIterator<DriverUnionAssignment>(query);
-        while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
+        while (CosmosReadResponseGuard.ReadHasMoreResults(iterator, ct))
+        {
+            var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => iterator.ReadNextAsync(ct),
+                ct);
+            results.AddRange(CosmosReadResponseGuard.ReadPageItems(page, ct));
+            ct.ThrowIfCancellationRequested();
+        }
         assignments = results;
     }
 
@@ -1982,7 +2344,7 @@ opsUnions.MapGet("/{unionId}/drivers", async (HttpContext context, string unionI
                 profile.DriverId, profile.FullName, profile.PhoneNumber, profile.ZoneId,
                 profile.VehicleMake, profile.VehicleModel, profile.VehicleRegistration,
                 profile.ServiceClass, profile.PassengerCapacity, profile.Status,
-                ProfilePhotoBase64 = profile.ProfilePhotoApprovalStatus == "Approved" && profile.ProfilePhotoApprovedByUnionId == unionId
+                ProfilePhotoBase64 = DriverProfileReviewGuard.IsApprovedForUnionVisibility(profile, unionId)
                     ? await GetProfilePhotoBase64Async(profile, ct) : null,
                 profile.ProfilePhotoContentType, profile.ProfilePhotoCapturedAtUtc,
                 profile.ProfilePhotoApprovalStatus
@@ -2168,7 +2530,10 @@ unionManagerApi.MapGet("/drivers", async (ClaimsPrincipal user, CancellationToke
     {
         if (!unionIds.Contains(assignment.UnionId)) continue;
         var union = await FindUnionAsync(assignment.UnionId, ct);
-        if (union is null || union.Status != "Active") continue;
+        if (union is null || union.Status != "Active" ||
+            union.ServiceClasses is null ||
+            !union.ServiceClasses.Contains("cab", StringComparer.OrdinalIgnoreCase))
+            continue;
         var profile = await FindDriverProfileAsync(assignment.DriverId, ct);
         if (profile is null || !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
             continue;
@@ -2224,11 +2589,13 @@ unionManagerApi.MapGet("/drivers/{driverId}/documents/{documentType}", async (
         return Results.NotFound();
     var union = await FindUnionAsync(assignment.UnionId, ct);
     if (union is null || union.Status != "Active" ||
+        union.ServiceClasses is null ||
         !union.ServiceClasses.Contains("cab", StringComparer.OrdinalIgnoreCase))
         return Results.NotFound();
     var profile = await FindDriverProfileAsync(driverId, ct);
     if (profile is null || profile.Status != "Approved" ||
         !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase) ||
+        union.ZoneIds is null ||
         !union.ZoneIds.Contains(profile.ZoneId, StringComparer.OrdinalIgnoreCase))
         return Results.NotFound();
     var document = profile.Documents?.FirstOrDefault(item =>
@@ -2291,8 +2658,14 @@ unionManagerApi.MapGet("/reconciliation", async (ClaimsPrincipal user, Cancellat
             var query = new QueryDefinition(TurnOva.API.UnionReconciliationQuery.Sql)
                 .WithParameter("@unionId", unionId);
             using var iterator = rideContainer.GetItemQueryIterator<UnionReconciliationQueryProjection>(query);
-            while (iterator.HasMoreResults)
-                reconciliationRecords.AddRange(await iterator.ReadNextAsync(ct));
+            while (CosmosReadResponseGuard.ReadHasMoreResults(iterator, ct))
+            {
+                var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                    () => iterator.ReadNextAsync(ct),
+                    ct);
+                reconciliationRecords.AddRange(CosmosReadResponseGuard.ReadPageItems(page, ct));
+                ct.ThrowIfCancellationRequested();
+            }
         }
     }
 
@@ -2366,7 +2739,9 @@ unionManagerApi.MapPut("/drivers/{driverId}/selfie-review", async (
             profile.Documents is null ||
             !profile.Documents.Any(document => document.DocumentType == "DrivingLicence" && document.Status == "Approved") ||
             !profile.Documents.Any(document => document.DocumentType == "VehicleRegistration" && document.Status == "Approved") ||
+            union.ServiceClasses is null ||
             !union.ServiceClasses.Contains("cab", StringComparer.OrdinalIgnoreCase) ||
+            union.ZoneIds is null ||
             !union.ZoneIds.Contains(profile.ZoneId, StringComparer.OrdinalIgnoreCase))
             return Results.Conflict(new { message = "The active union, Cab driver profile and required licence/vehicle documents must be approved before selfie review." });
 
@@ -2579,7 +2954,10 @@ app.MapPost("/api/v1/ops/drivers/{driverId}/union-assignment", async (
             previous?.AssignedAtUtc ?? now, now, assignmentReason,
             eventId, eventType, actor, previous?.UnionId, previous?.UnionName, now,
             operationKey, true);
-        await SaveUnionAssignmentAsync(assignment, ct);
+        if (!await UnionAssignmentWriter.TrySaveAsync(
+                unionAssignmentContainer, unionAssignments, assignment, previous, ct))
+            return Results.Conflict(new { message = "The driver's Union assignment changed while the transfer was being saved. Refresh and retry." });
+
         await EnsureUnionAssignmentAuditAsync(assignment, ct);
         return Results.Ok(await FindUnionAssignmentAsync(driverId, ct) ?? assignment);
     }
@@ -2611,8 +2989,14 @@ app.MapGet("/api/v1/ops/drivers/{driverId}/union-history", async (
 
 
 app.MapGet("/api/v1/driver/payslips/{year:int}/{month:int}.pdf", async (
-    ClaimsPrincipal user, int year, int month, CancellationToken ct) =>
+    HttpContext context, ClaimsPrincipal user, int year, int month, CancellationToken ct) =>
 {
+    // Monthly work statements contain private Driver/Union information. Prevent browsers,
+    // shared proxies and intermediary caches from retaining either generated or stored PDFs.
+    context.Response.Headers.CacheControl = "private, no-store";
+    context.Response.Headers["Pragma"] = "no-cache";
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var indiaTimeZoneOffset = TimeSpan.FromMinutes(330);
@@ -3143,9 +3527,8 @@ app.MapGet("/api/v1/rider/discovery", async (
             .ThenBy(candidate => candidate.Profile.DriverId, StringComparer.Ordinal)
             .Take(3))
         {
-            var approvedForCurrentUnion =
-                candidate.Profile.ProfilePhotoApprovalStatus == "Approved" &&
-                candidate.Profile.ProfilePhotoApprovedByUnionId == union.UnionId;
+            var approvedForCurrentUnion = DriverProfileReviewGuard.IsApprovedForUnionVisibility(
+                candidate.Profile, union.UnionId);
             var photo = approvedForCurrentUnion
                 ? await GetProfilePhotoBase64Async(candidate.Profile, ct)
                 : null;
@@ -3359,9 +3742,17 @@ app.MapPost("/api/v1/rider/bookings", async (
     {
         try
         {
-            var existingRecord = await idempotencyContainer.ReadItemAsync<RideIdempotencyRecord>(
-                keyId, new PartitionKey(riderId), cancellationToken: ct);
-            var existingResult = await ResolveExistingBookingIdempotencyAsync(existingRecord.Resource);
+            var existingResponse = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => idempotencyContainer!.ReadItemAsync<RideIdempotencyRecord>(
+                    keyId, new PartitionKey(riderId), cancellationToken: ct),
+                ct);
+            var existingRecord = CosmosReadResponseGuard.ReadResource(
+                existingResponse,
+                item => string.Equals(item.id, keyId, StringComparison.Ordinal) &&
+                    string.Equals(item.riderId, riderId, StringComparison.Ordinal),
+                "Rider booking idempotency record",
+                ct);
+            var existingResult = await ResolveExistingBookingIdempotencyAsync(existingRecord);
             if (existingResult is not null) return existingResult;
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
@@ -3421,7 +3812,10 @@ app.MapPost("/api/v1/rider/bookings", async (
         {
             try
             {
-                await idempotencyContainer.CreateItemAsync(idempotencyRecord, new PartitionKey(riderId), cancellationToken: ct);
+                _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                    () => idempotencyContainer.CreateItemAsync(
+                        idempotencyRecord, new PartitionKey(riderId), cancellationToken: ct),
+                    ct);
             }
             catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
             {
@@ -3689,7 +4083,13 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
     }
     else
     {
-        try { await idempotencyContainer.CreateItemAsync(reservation, new PartitionKey(riderId), cancellationToken: ct); }
+        try
+        {
+            _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => idempotencyContainer.CreateItemAsync(
+                    reservation, new PartitionKey(riderId), cancellationToken: ct),
+                ct);
+        }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
         {
             var existing = await CosmosCreateConflictRead.ReadAfterCreateConflictAsync<RideIdempotencyRecord>(
@@ -3818,9 +4218,16 @@ app.MapGet("/api/v1/driver/rides/available", async (ClaimsPrincipal user, QueueS
         string.Equals(x.ServiceClass, approvedProfile.ServiceClass, StringComparison.OrdinalIgnoreCase))
         .Select(ToDriverRideHistoryItem).ToArray());
     var query = new QueryDefinition("SELECT * FROM c WHERE c.status = @status").WithParameter("@status", "Requested");
-    var iterator = rideContainer.GetItemQueryIterator<DemoRide>(query);
+    using var iterator = rideContainer.GetItemQueryIterator<DemoRide>(query);
     var results = new List<DemoRide>();
-    while (iterator.HasMoreResults) results.AddRange(await iterator.ReadNextAsync(ct));
+    while (CosmosReadResponseGuard.ReadHasMoreResults(iterator, ct))
+    {
+        var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+            () => iterator.ReadNextAsync(ct),
+            ct);
+        results.AddRange(CosmosReadResponseGuard.ReadPageItems(page, ct));
+        ct.ThrowIfCancellationRequested();
+    }
     return Results.Ok(results.Where(ride =>
         ride.Passengers <= approvedProfile.PassengerCapacity &&
         string.Equals(ride.DispatchZoneId, approvedProfile.ZoneId, StringComparison.OrdinalIgnoreCase) &&
@@ -4078,28 +4485,46 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (HttpContext context, ClaimsP
     }
     try
     {
-        var response = await rideContainer.ReadItemAsync<DemoRide>(rideId, new PartitionKey(rideId), cancellationToken: ct);
-        if (!string.Equals(response.Resource.RideId, rideId, StringComparison.Ordinal))
+        var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+            () => rideContainer!.ReadItemAsync<DemoRide>(
+                rideId, new PartitionKey(rideId), cancellationToken: ct),
+            ct);
+        var requestedRide = CosmosReadResponseGuard.ReadResponseValue(
+            response, static itemResponse => itemResponse.Resource, ct);
+        if (requestedRide is null ||
+            !string.Equals(requestedRide.RideId, rideId, StringComparison.Ordinal))
             return Results.NotFound(new { message = "Ride not found." });
-        if (response.Resource.Status != "Requested")
+        if (requestedRide.Status != "Requested")
             return Results.Conflict(new { message = "This ride is no longer available." });
-        if (!string.Equals(response.Resource.DispatchZoneId, approvedProfile.ZoneId, StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(response.Resource.ServiceClass, approvedProfile.ServiceClass, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(requestedRide.DispatchZoneId, approvedProfile.ZoneId, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(requestedRide.ServiceClass, approvedProfile.ServiceClass, StringComparison.OrdinalIgnoreCase))
             return Results.Conflict(new { message = "This ride belongs to a different dispatch zone or vehicle queue." });
-        if (response.Resource.Passengers > approvedProfile.PassengerCapacity)
+        if (requestedRide.Passengers > approvedProfile.PassengerCapacity)
             return Results.Conflict(new { message = "This ride exceeds your approved vehicle passenger capacity." });
+        var etag = CosmosReadResponseGuard.ReadResponseEtag(
+            response, static itemResponse => itemResponse.ETag, ct);
+        if (!CosmosEtagPolicy.HasObservedEtag(etag))
+            return Results.Conflict(new { message = "This ride cannot be accepted safely right now. Refresh and retry." });
         if (!await driverRideReservations.TryAcquireAsync(driverId, rideId, ct,
             new DriverRideReservationAuditContext(driverId, "Driver", DriverRideReservationAuditReasons.LegacyRideAccept)))
             return Results.Conflict(new { message = "You already have an active ride. Complete or cancel it before accepting another ride." });
         var acceptedAtUtc = DateTimeOffset.UtcNow;
-        var accepted = response.Resource with
+        var accepted = requestedRide with
         {
             Status = "Accepted", DriverId = driverId, AcceptedAt = acceptedAtUtc, LocationSharingActive = true,
-            AuditEvents = AppendRideAuditEvent(response.Resource, "RideStatusChanged", driverId, "Driver",
-                response.Resource.Status, "Accepted", occurredAtUtc: acceptedAtUtc)
+            AuditEvents = AppendRideAuditEvent(requestedRide, "RideStatusChanged", driverId, "Driver",
+                requestedRide.Status, "Accepted", occurredAtUtc: acceptedAtUtc)
         };
-        await rideContainer.ReplaceItemAsync(accepted, rideId, new PartitionKey(rideId),
-            new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
+        await RideAcceptWriteGuard.ExecuteAsync(
+            () => rideContainer!.ReplaceItemAsync(
+                accepted, rideId, new PartitionKey(rideId),
+                new ItemRequestOptions { IfMatchEtag = etag }, ct),
+            async releaseToken =>
+            {
+                _ = await driverRideReservations.TryReleaseAsync(driverId, rideId, releaseToken,
+                    new DriverRideReservationAuditContext(driverId, "Driver", DriverRideReservationAuditReasons.RideAcceptConflict));
+            },
+            ct);
         if (pendingOffer is not null && !string.IsNullOrWhiteSpace(pendingOffer.ETag))
         {
             var resolvedAttempts = pendingOffer.Attempts.Select(attempt =>
@@ -4115,9 +4540,13 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (HttpContext context, ClaimsP
     }
     catch (CosmosException ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
     {
-        await driverRideReservations.TryReleaseAsync(driverId, rideId, ct,
-            new DriverRideReservationAuditContext(driverId, "Driver", DriverRideReservationAuditReasons.RideAcceptConflict));
         return Results.Conflict(new { message = "This ride is no longer available." });
+    }
+    catch
+    {
+        // Do not leak a stale provider failure when request cancellation raced the write.
+        ct.ThrowIfCancellationRequested();
+        throw;
     }
 }).RequireAuthorization(policy => policy.RequireRole("Driver"));
 
@@ -4228,9 +4657,10 @@ app.MapPost("/api/v1/queues/{zoneId}/{serviceClass}/offer-timeout", async (
 
 app.MapPost("/api/v1/rides/{rideId}/location", async (ClaimsPrincipal user, string rideId, DriverLocationRequest location, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
+    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     if (!RideLifecycle.AreCoordinatesValid(location.Latitude, location.Longitude))
         return Results.BadRequest(new { message = "Invalid coordinates." });
-    var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.DriverId != driverId || !ride.LocationSharingActive || !RideLifecycle.IsLocationSharingActive(ride.Status))
         return Results.NotFound(new { message = "Active ride not found." });
@@ -4429,6 +4859,7 @@ app.MapPost("/api/v1/rides/{rideId}/start", async (
     ClaimsPrincipal user, string rideId, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.DriverId != driverId) return Results.NotFound();
     if (ride.Status == "InProgress") return Results.Ok(ToDriverRideHistoryItem(ride));
@@ -4460,6 +4891,7 @@ app.MapPost("/api/v1/rides/{rideId}/complete", async (
     ClaimsPrincipal user, string rideId, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.DriverId != driverId) return Results.NotFound();
     if (ride.Status == "Completed")
@@ -4558,6 +4990,7 @@ app.MapPost("/api/v1/driver/rides/{rideId}/payment-report", async (
 app.MapPost("/api/v1/rides/{rideId}/cancel", async (ClaimsPrincipal user, string rideId, IHubContext<RideTrackingHub> hub, CancellationToken ct) =>
 {
     var riderId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(riderId)) return Results.Forbid();
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.RiderId != riderId) return Results.NotFound();
     if (ride.Status == "Cancelled") return Results.Ok(ToRiderRideDetailsResponse(ride));
@@ -4575,6 +5008,7 @@ app.MapPost("/api/v1/rides/{rideId}/cancel", async (ClaimsPrincipal user, string
 async Task<IResult> TransitionRideAsync(ClaimsPrincipal user, string rideId, string expected, string next, CancellationToken ct)
 {
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(driverId)) return Results.Forbid();
     var ride = await FindRideAsync(rideId, ct);
     if (ride is null || ride.DriverId != driverId) return Results.NotFound();
     if (ride.Status == next) return Results.Ok(ToDriverRideHistoryItem(ride));
@@ -4818,18 +5252,33 @@ async Task<bool> TryReplaceRideAsync(DemoRide current, DemoRide updated, Cancell
         }
         else
         {
-            var response = await rideContainer.ReadItemAsync<DemoRide>(
-                current.RideId, new PartitionKey(current.RideId), cancellationToken: ct);
-            if (!IsSameRideSnapshot(response.Resource, current))
+            var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => rideContainer!.ReadItemAsync<DemoRide>(
+                    current.RideId, new PartitionKey(current.RideId), cancellationToken: ct),
+                ct);
+            var observedRide = CosmosReadResponseGuard.ReadResponseValue(
+                response, static itemResponse => itemResponse.Resource, ct);
+            if (observedRide is null || !IsSameRideSnapshot(observedRide, current))
             {
                 replaced = false;
             }
             else
             {
-                await rideContainer.ReplaceItemAsync(
-                    updated, current.RideId, new PartitionKey(current.RideId),
-                    new ItemRequestOptions { IfMatchEtag = response.ETag }, ct);
-                replaced = true;
+                var etag = CosmosReadResponseGuard.ReadResponseEtag(
+                    response, static itemResponse => itemResponse.ETag, ct);
+                if (!CosmosEtagPolicy.HasObservedEtag(etag))
+                {
+                    replaced = false;
+                }
+                else
+                {
+                    _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                        () => rideContainer!.ReplaceItemAsync(
+                            updated, current.RideId, new PartitionKey(current.RideId),
+                            new ItemRequestOptions { IfMatchEtag = etag }, ct),
+                        ct);
+                    replaced = true;
+                }
             }
         }
 
@@ -4875,8 +5324,14 @@ app.MapGet("/api/v1/driver/rides/mine", async (ClaimsPrincipal user, Cancellatio
         var query = new QueryDefinition("SELECT * FROM c WHERE c.driverId = @driverId")
             .WithParameter("@driverId", driverId);
         using var iterator = rideContainer.GetItemQueryIterator<DemoRide>(query);
-        while (iterator.HasMoreResults)
-            history.AddRange(await iterator.ReadNextAsync(ct));
+        while (CosmosReadResponseGuard.ReadHasMoreResults(iterator, ct))
+        {
+            var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => iterator.ReadNextAsync(ct),
+                ct);
+            history.AddRange(CosmosReadResponseGuard.ReadPageItems(page, ct));
+            ct.ThrowIfCancellationRequested();
+        }
     }
 
     var verifiedHistory = new List<DemoRide>(history.Count);
@@ -4914,8 +5369,14 @@ app.MapGet("/api/v1/rides/mine", async (ClaimsPrincipal user, CancellationToken 
         var query = new QueryDefinition("SELECT * FROM c WHERE c.riderId = @riderId")
             .WithParameter("@riderId", riderId);
         using var iterator = rideContainer.GetItemQueryIterator<DemoRide>(query);
-        while (iterator.HasMoreResults)
-            history.AddRange(await iterator.ReadNextAsync(ct));
+        while (CosmosReadResponseGuard.ReadHasMoreResults(iterator, ct))
+        {
+            var page = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => iterator.ReadNextAsync(ct),
+                ct);
+            history.AddRange(CosmosReadResponseGuard.ReadPageItems(page, ct));
+            ct.ThrowIfCancellationRequested();
+        }
     }
 
     var verifiedHistory = new List<DemoRide>(history.Count);
@@ -4949,6 +5410,7 @@ app.MapGet("/api/v1/rides/mine", async (ClaimsPrincipal user, CancellationToken 
 app.MapGet("/api/v1/rides/{rideId}", async (ClaimsPrincipal user, string rideId, CancellationToken ct) =>
 {
     var riderId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+    if (string.IsNullOrWhiteSpace(riderId)) return Results.Forbid();
     var ride = await FindRideAsync(
         rideId, ct,
         candidate => string.Equals(candidate.RiderId, riderId, StringComparison.Ordinal));

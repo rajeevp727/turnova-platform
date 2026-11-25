@@ -2,6 +2,7 @@ using System.Net;
 using Microsoft.Azure.Cosmos;
 using TurnOva.Application.Support;
 using TurnOva.Domain.Support;
+using TurnOva.Infrastructure.Database;
 
 namespace TurnOva.Infrastructure.Support;
 
@@ -11,25 +12,37 @@ public sealed class CosmosSupportRequestStore(Container container) : ISupportReq
         SupportRequest request,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(request);
 
         try
         {
-            await container.CreateItemAsync(
-                request,
-                new PartitionKey(request.ReporterId),
-                cancellationToken: cancellationToken);
+            _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => container.CreateItemAsync(
+                    request,
+                    new PartitionKey(request.ReporterId),
+                    cancellationToken: cancellationToken),
+                cancellationToken);
             return new SupportRequestWriteResult(SupportRequestWriteStatus.Created, request);
         }
         catch (CosmosException exception) when (exception.StatusCode == HttpStatusCode.Conflict)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var existing = (await container.ReadItemAsync<SupportRequest>(
-                    request.Id,
-                    new PartitionKey(request.ReporterId),
-                    cancellationToken: cancellationToken)).Resource;
+                var existingResponse = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                    () => container.ReadItemAsync<SupportRequest>(
+                        request.Id,
+                        new PartitionKey(request.ReporterId),
+                        cancellationToken: cancellationToken),
+                    cancellationToken);
+                var existing = CosmosReadResponseGuard.ReadResource(
+                    existingResponse,
+                    item => string.Equals(item.Id, request.Id, StringComparison.Ordinal) &&
+                        string.Equals(item.ReporterId, request.ReporterId, StringComparison.Ordinal),
+                    "support request",
+                    cancellationToken,
+                    "Cosmos returned a malformed support request resource.");
 
                 var sameSubmission =
                     string.Equals(existing.ReporterId, request.ReporterId, StringComparison.Ordinal) &&
@@ -45,6 +58,7 @@ public sealed class CosmosSupportRequestStore(Container container) : ISupportReq
             }
             catch (CosmosException missing) when (missing.StatusCode == HttpStatusCode.NotFound)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 return new SupportRequestWriteResult(SupportRequestWriteStatus.Conflict, request);
             }
         }

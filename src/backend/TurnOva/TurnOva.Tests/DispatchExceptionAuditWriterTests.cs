@@ -59,6 +59,8 @@ public sealed class DispatchExceptionAuditWriterTests
     [InlineData("trace")]
     [InlineData("reason")]
     [InlineData("offer")]
+    [InlineData("timestamp-default")]
+    [InlineData("timestamp-offset")]
     public async Task RecordAsync_DoesNotAcceptConflictWhenCanonicalMetadataDiffers(string mismatch)
     {
         var existing = ExpectedAudit();
@@ -71,6 +73,11 @@ public sealed class DispatchExceptionAuditWriterTests
             "trace" => existing with { TraceId = "different-trace" },
             "reason" => existing with { ReasonCategory = QueueAuditReasonCategories.DriverReservationFailed },
             "offer" => existing with { OfferId = "offer-1" },
+            "timestamp-default" => existing with { OccurredAtUtc = default },
+            "timestamp-offset" => existing with
+            {
+                OccurredAtUtc = DateTimeOffset.Parse("2026-11-08T12:00:00+05:30")
+            },
             _ => throw new ArgumentOutOfRangeException(nameof(mismatch))
         };
 
@@ -150,8 +157,8 @@ public sealed class DispatchExceptionAuditWriterTests
                 "driver-actor-2", "zone-a", "cab", "trace-reused",
                 QueueAuditReasonCategories.QueueReadFailed, CancellationToken.None)));
 
-        Assert.Single(outcomes.Where(exception => exception is null));
-        Assert.IsType<InvalidOperationException>(Assert.Single(outcomes.Where(exception => exception is not null)));
+        Assert.Single(outcomes, exception => exception is null);
+        Assert.IsType<InvalidOperationException>(Assert.Single(outcomes, exception => exception is not null));
         Assert.Equal(2, store.CreateAttempts);
         Assert.Equal(1, store.ReadCount);
         var canonical = Assert.Single(store.Events);

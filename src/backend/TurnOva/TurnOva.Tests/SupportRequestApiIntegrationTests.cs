@@ -131,18 +131,22 @@ public sealed class SupportRequestApiIntegrationTests
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    [Fact]
-    public async Task NonRiderDriverRoleCannotSubmitSupportRequest()
+    [Theory]
+    [InlineData("Ops")]
+    [InlineData("UnionManager")]
+    public async Task NonRiderDriverRoleCannotSubmitSupportRequest(string role)
     {
-        using var factory = new SupportApiFactory();
+        var store = new CapturingSupportRequestStore();
+        using var factory = new SupportApiFactory(supportStore: store);
         using var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken("Ops"));
-        client.DefaultRequestHeaders.Add("Idempotency-Key", "support-request-ops-01");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken(role));
+        client.DefaultRequestHeaders.Add("Idempotency-Key", "support-request-non-rider-driver-01");
 
         using var response = await client.PostAsJsonAsync("/api/v1/support/requests",
             new { subject = "Trip update issue", description = "The trip status did not refresh after reconnecting." });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Null(store.LastRequest);
     }
 
     [Fact]
@@ -174,10 +178,12 @@ public sealed class SupportRequestApiIntegrationTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    [Fact]
-    public async Task StagingSupportIntakeFailsClosedUntilPolicyIsApproved()
+    [Theory]
+    [InlineData("Staging")]
+    [InlineData("QA")]
+    public async Task NonDevelopmentSupportIntakeFailsClosedUntilPolicyIsApproved(string environmentName)
     {
-        using var factory = new SupportApiFactory("Staging");
+        using var factory = new SupportApiFactory(environmentName);
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken("Rider"));
         client.DefaultRequestHeaders.Add("Idempotency-Key", "support-request-staging-01");
@@ -203,10 +209,12 @@ public sealed class SupportRequestApiIntegrationTests
         Assert.Equal("ready", body.RootElement.GetProperty("status").GetString());
     }
 
-    [Fact]
-    public async Task StagingInMemoryPersistenceDoesNotReportReady()
+    [Theory]
+    [InlineData("Staging")]
+    [InlineData("QA")]
+    public async Task NonDevelopmentInMemoryPersistenceDoesNotReportReady(string environmentName)
     {
-        using var factory = new SupportApiFactory("Staging");
+        using var factory = new SupportApiFactory(environmentName);
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync("/health/ready");
@@ -218,10 +226,12 @@ public sealed class SupportRequestApiIntegrationTests
         Assert.Equal("The configured storage dependency is not reachable.", body.RootElement.GetProperty("detail").GetString());
     }
 
-    [Fact]
-    public void StagingSupportIntakeCannotEnableWithoutApprovedRetentionDays()
+    [Theory]
+    [InlineData("Staging")]
+    [InlineData("QA")]
+    public void NonDevelopmentSupportIntakeCannotEnableWithoutApprovedRetentionDays(string environmentName)
     {
-        using var factory = new SupportApiFactory("Staging", policyApproved: true);
+        using var factory = new SupportApiFactory(environmentName, policyApproved: true);
 
         var exception = Record.Exception(() => factory.CreateClient());
 
@@ -242,10 +252,12 @@ public sealed class SupportRequestApiIntegrationTests
         Assert.Contains("Non-development support intake requires CosmosDb:Endpoint and CosmosDb:Key", exception.ToString());
     }
 
-    [Fact]
-    public async Task StagingSupportIntakeReturns503BeforeParsingMalformedBody()
+    [Theory]
+    [InlineData("Staging")]
+    [InlineData("QA")]
+    public async Task NonDevelopmentSupportIntakeReturns503BeforeParsingMalformedBody(string environmentName)
     {
-        using var factory = new SupportApiFactory("Staging");
+        using var factory = new SupportApiFactory(environmentName);
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken("Rider"));
         using var content = new StringContent("{not-json", Encoding.UTF8, "application/json");
@@ -327,8 +339,8 @@ public sealed class SupportRequestApiIntegrationTests
         var endpoints = factory.Services.GetServices<EndpointDataSource>()
             .SelectMany(source => source.Endpoints)
             .OfType<RouteEndpoint>();
-        var endpoint = Assert.Single(endpoints.Where(candidate =>
-            string.Equals(candidate.RoutePattern.RawText, "/api/v1/support/requests", StringComparison.Ordinal)));
+        var endpoint = Assert.Single(endpoints, candidate =>
+            string.Equals(candidate.RoutePattern.RawText, "/api/v1/support/requests", StringComparison.Ordinal));
 
         var limit = endpoint.Metadata.GetMetadata<IRequestSizeLimitMetadata>();
         Assert.NotNull(limit);

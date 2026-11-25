@@ -138,4 +138,61 @@ public sealed class CosmosCreateConflictReadTests
 
         container.VerifyNoOtherCalls();
     }
+
+    [Fact]
+    public async Task ReadAfterConflictDoesNotReturnWhenResourceHydrationCompletesAfterCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var document = new TestDocument("idempotency-key");
+        var response = new Mock<ItemResponse<TestDocument>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource).Returns(() =>
+        {
+            cancellation.Cancel();
+            return document;
+        });
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<TestDocument>(
+                "idempotency-key", It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(), cancellation.Token))
+            .ReturnsAsync(response.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            CosmosCreateConflictRead.ReadAfterCreateConflictAsync<TestDocument>(
+                container.Object, "idempotency-key", new PartitionKey("rider-1"), cancellation.Token));
+
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyNoOtherCalls();
+        container.Verify(value => value.ReadItemAsync<TestDocument>(
+            "idempotency-key", It.IsAny<PartitionKey>(),
+            It.IsAny<ItemRequestOptions?>(), cancellation.Token), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ReadAfterConflictCancellationTakesPrecedenceOverProviderFailure()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var failure = new CosmosException(
+            "provider-failure-after-cancellation", HttpStatusCode.ServiceUnavailable, 0,
+            "idempotency-conflict-test", 0);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<TestDocument>(
+                "idempotency-key", It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(), cancellation.Token))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<TestDocument>>(failure);
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            CosmosCreateConflictRead.ReadAfterCreateConflictAsync<TestDocument>(
+                container.Object, "idempotency-key", new PartitionKey("rider-1"), cancellation.Token));
+
+        container.Verify(value => value.ReadItemAsync<TestDocument>(
+            "idempotency-key", It.IsAny<PartitionKey>(),
+            It.IsAny<ItemRequestOptions?>(), cancellation.Token), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
 }

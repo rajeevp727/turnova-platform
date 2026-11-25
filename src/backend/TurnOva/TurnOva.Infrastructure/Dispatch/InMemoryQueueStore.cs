@@ -16,21 +16,28 @@ public sealed class InMemoryQueueStore : IQueueStore
     public Task<IReadOnlyList<DriverQueueEntry>> GetEligibleAsync(
         string zoneId, string serviceClass, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var key = Key(zoneId, serviceClass);
         if (!_queues.TryGetValue(key, out var queue))
             return Task.FromResult<IReadOnlyList<DriverQueueEntry>>(Array.Empty<DriverQueueEntry>());
 
         lock (queue)
-            return Task.FromResult<IReadOnlyList<DriverQueueEntry>>(queue.Entries);
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult<IReadOnlyList<DriverQueueEntry>>(queue.GetEntries(cancellationToken));
+        }
     }
 
     public Task AddAsync(DriverQueueEntry entry, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        DriverQueueEntry.ValidateForJoin(entry);
         var key = Key(entry.ZoneId, entry.ServiceClass);
         var queue = _queues.GetOrAdd(key, _ => new FifoQueue());
         lock (queue)
         {
-            queue.Enqueue(entry with { Sequence = Interlocked.Increment(ref _sequence) });
+            cancellationToken.ThrowIfCancellationRequested();
+            queue.Enqueue(entry with { Sequence = Interlocked.Increment(ref _sequence) }, cancellationToken);
             RecordAudit(key, entry.DriverId, QueueAuditEventTypes.Joined);
         }
         return Task.CompletedTask;
@@ -40,13 +47,15 @@ public sealed class InMemoryQueueStore : IQueueStore
         string driverId, string zoneId, string serviceClass, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ValidateDriverId(driverId);
         var key = Key(zoneId, serviceClass);
         if (!_queues.TryGetValue(key, out var queue))
             return Task.FromResult(false);
 
         lock (queue)
         {
-            var removed = queue.Remove(driverId);
+            cancellationToken.ThrowIfCancellationRequested();
+            var removed = queue.Remove(driverId, cancellationToken);
             if (removed)
                 RecordAudit(key, driverId, QueueAuditEventTypes.Left);
             return Task.FromResult(removed);
@@ -57,14 +66,20 @@ public sealed class InMemoryQueueStore : IQueueStore
         string driverId, string zoneId, string serviceClass, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ValidateDriverId(driverId);
         var key = Key(zoneId, serviceClass);
         if (!_queues.TryGetValue(key, out var queue))
             return Task.FromResult(false);
 
         lock (queue)
         {
-            var current = queue.Entries.FirstOrDefault(entry => entry.DriverId == driverId);
+            cancellationToken.ThrowIfCancellationRequested();
+            var current = queue.FindEligible(driverId, cancellationToken);
             if (current is null) return Task.FromResult(false);
+
+            // Once the mutation starts, finish the queue/audit update as one synchronous
+            // critical section even if cancellation arrives during the non-awaiting writes.
+            cancellationToken.ThrowIfCancellationRequested();
             queue.Remove(driverId);
             queue.Enqueue(current with
             {
@@ -80,15 +95,24 @@ public sealed class InMemoryQueueStore : IQueueStore
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(offerId)) throw new ArgumentException("Offer ID is required.", nameof(offerId));
+        ValidateDriverId(driverId);
         var key = Key(zoneId, serviceClass);
         if (!_queues.TryGetValue(key, out var queue)) return Task.FromResult(false);
         lock (queue)
         {
-            var current = queue.Entries.FirstOrDefault(entry => entry.DriverId == driverId);
+            cancellationToken.ThrowIfCancellationRequested();
+            var current = queue.FindEligible(driverId, cancellationToken);
             if (current is null) return Task.FromResult(false);
             var rotationKey = $"{key}|{driverId}";
             if (_rotations.TryGetValue(rotationKey, out var lastOfferId) && lastOfferId == offerId)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
                 return Task.FromResult(true);
+            }
+
+            // Keep the queue rotation, idempotency marker and audit fact together once
+            // the synchronous mutation begins.
+            cancellationToken.ThrowIfCancellationRequested();
             queue.Remove(driverId);
             queue.Enqueue(current with { JoinedAt = DateTimeOffset.UtcNow, Sequence = Interlocked.Increment(ref _sequence) });
             _rotations[rotationKey] = offerId;
@@ -106,6 +130,7 @@ public sealed class InMemoryQueueStore : IQueueStore
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        DispatchExceptionAuditInput.Validate(actorId, zoneId, serviceClass, traceId, reasonCategory);
         var key = Key(zoneId, serviceClass);
         var eventId = $"dispatch-exception-{traceId}";
         var deduplicationKey = $"{key}|{traceId}";
@@ -118,8 +143,11 @@ public sealed class InMemoryQueueStore : IQueueStore
             TraceId: traceId,
             ReasonCategory: reasonCategory);
 
+        cancellationToken.ThrowIfCancellationRequested();
         if (_exceptionAuditEvents.TryAdd(deduplicationKey, audit))
         {
+            // Complete the paired in-memory audit append after the deduplication marker
+            // is committed; cancellation must not leave only half of the write visible.
             _auditEvents.Enqueue(audit);
         }
         else if (_exceptionAuditEvents.TryGetValue(deduplicationKey, out var existing) &&
@@ -136,11 +164,7 @@ public sealed class InMemoryQueueStore : IQueueStore
     {
         cancellationToken.ThrowIfCancellationRequested();
         var key = Key(zoneId, serviceClass);
-        IReadOnlyList<QueueAuditEvent> events = _auditEvents
-            .Where(item => item.ZoneServiceKey == key)
-            .OrderByDescending(item => item.OccurredAtUtc)
-            .ThenByDescending(item => item.EventId, StringComparer.Ordinal)
-            .ToArray();
+        var events = InMemoryQueueAuditSnapshots.GetForZoneService(_auditEvents, key, cancellationToken);
         return Task.FromResult(events);
     }
 
@@ -161,6 +185,19 @@ public sealed class InMemoryQueueStore : IQueueStore
             traceId,
             reasonCategory));
 
-    private static string Key(string zoneId, string serviceClass) =>
-        $"{zoneId.Trim().ToLowerInvariant()}|{serviceClass.Trim().ToLowerInvariant()}";
+    private static string Key(string zoneId, string serviceClass)
+    {
+        if (string.IsNullOrWhiteSpace(zoneId))
+            throw new ArgumentException("Zone ID is required.", nameof(zoneId));
+        if (string.IsNullOrWhiteSpace(serviceClass))
+            throw new ArgumentException("Service class is required.", nameof(serviceClass));
+
+        return $"{zoneId.Trim().ToLowerInvariant()}|{serviceClass.Trim().ToLowerInvariant()}";
+    }
+
+    private static void ValidateDriverId(string driverId)
+    {
+        if (string.IsNullOrWhiteSpace(driverId))
+            throw new ArgumentException("Driver ID is required.", nameof(driverId));
+    }
 }

@@ -71,6 +71,7 @@ public sealed class CosmosMigrationLeaseCoordinator(
 {
     public async Task<CosmosMigrationLease> AcquireAsync(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         options.Validate();
         var owner = Guid.NewGuid().ToString("N");
 
@@ -86,7 +87,9 @@ public sealed class CosmosMigrationLeaseCoordinator(
                 return created;
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             var current = await store.ReadAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             if (current is null)
             {
                 // The conflicting lease may have been released between Create and Read.
@@ -109,6 +112,7 @@ public sealed class CosmosMigrationLeaseCoordinator(
 
                 // Another runner changed or removed the expired lease after the point read.
                 // Back off before retrying create so repeated ETag races cannot spin tightly.
+                cancellationToken.ThrowIfCancellationRequested();
                 await delay.DelayAsync(options.RetryDelay, cancellationToken);
                 continue;
             }
@@ -121,13 +125,18 @@ public sealed class CosmosMigrationLeaseCoordinator(
         CosmosMigrationLease current,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var renewed = await store.TryReplaceAsync(
             current,
             current.Owner,
             timeProvider.GetUtcNow().Add(options.LeaseDuration),
             cancellationToken);
 
-        return renewed ?? throw new CosmosMigrationLeaseLostException(current.Owner);
+        if (renewed is not null)
+            return renewed;
+
+        cancellationToken.ThrowIfCancellationRequested();
+        throw new CosmosMigrationLeaseLostException(current.Owner);
     }
 
     public async Task RunRenewalLoopAsync(

@@ -60,6 +60,20 @@ public sealed class RideOfferStoreTests
         Assert.Equal("ride-1", result!.RideId);
     }
 
+    [Fact]
+    public async Task GetPendingForDriverAsync_RejectsMultiplePendingOffers()
+    {
+        var store = new InMemoryRideOfferStore();
+        var now = DateTimeOffset.UtcNow;
+        Assert.True(await store.TryCreateAsync(CreateState("ride-1", "driver-1", now.AddMinutes(1))));
+        Assert.True(await store.TryCreateAsync(CreateState("ride-2", "driver-1", now.AddMinutes(2))));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            store.GetPendingForDriverAsync("driver-1"));
+
+        Assert.Equal("Multiple pending ride offers exist for the driver.", exception.Message);
+    }
+
     private static RideOfferState CreateState(string rideId, string driverId, DateTimeOffset expiresAt)
     {
         var offeredAt = expiresAt.AddMinutes(-1);

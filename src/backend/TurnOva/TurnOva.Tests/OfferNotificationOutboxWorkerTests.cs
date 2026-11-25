@@ -32,6 +32,7 @@ public sealed class OfferNotificationOutboxWorkerTests
         Assert.Equal("RideOfferReceived", message.Method);
         Assert.Equal(state.RideId, message.Payload.GetProperty("rideId").GetString());
         Assert.Equal(state.CurrentOfferId, message.Payload.GetProperty("offerId").GetString());
+        Assert.Equal(state.ExpiresAtUtc, message.Payload.GetProperty("expiresAtUtc").GetDateTimeOffset());
 
         var saved = await store.GetByRideAsync(state.RideId);
         Assert.Equal("Sent", saved?.NotificationStatus);
@@ -61,15 +62,21 @@ public sealed class OfferNotificationOutboxWorkerTests
         var state = CreateState("ride-outbox-retry", "driver-outbox-retry");
         Assert.True(await store.TryCreateAsync(state));
         var attempts = 0;
+        var firstAttemptFailed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var hub = new RecordingHubContext(expectedMessages: 1, send: (_, _) =>
         {
             if (Interlocked.Increment(ref attempts) == 1)
+            {
+                firstAttemptFailed.TrySetResult(true);
                 throw new InvalidOperationException("simulated transient SignalR failure");
+            }
             return Task.CompletedTask;
         });
-        using var worker = CreateWorker(store, hub);
+        using var worker = CreateWorker(store, hub, pollIntervalSeconds: 2);
 
         await worker.StartAsync(CancellationToken.None);
+        await firstAttemptFailed.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Equal("Pending", (await store.GetByRideAsync(state.RideId))?.NotificationStatus);
         await hub.WaitForMessagesAsync(TimeSpan.FromSeconds(5));
         await WaitUntilAsync(async () =>
             (await store.GetByRideAsync(state.RideId))?.NotificationStatus == "Sent");
@@ -104,9 +111,12 @@ public sealed class OfferNotificationOutboxWorkerTests
         Assert.All(messages, message => Assert.Equal(state.CurrentOfferId, message.Payload.GetProperty("offerId").GetString()));
     }
 
-    private static OfferNotificationOutboxWorker CreateWorker(IRideOfferStore store, RecordingHubContext hub) =>
+    private static OfferNotificationOutboxWorker CreateWorker(
+        IRideOfferStore store,
+        RecordingHubContext hub,
+        int pollIntervalSeconds = 1) =>
         new(store, hub, TimeProvider.System,
-            Options.Create(new DispatchOfferOptions { NotificationPollIntervalSeconds = 1, NotificationBatchSize = 10 }),
+            Options.Create(new DispatchOfferOptions { NotificationPollIntervalSeconds = pollIntervalSeconds, NotificationBatchSize = 10 }),
             NullLogger<OfferNotificationOutboxWorker>.Instance);
 
     private static RideOfferState CreateState(string rideId, string driverId)

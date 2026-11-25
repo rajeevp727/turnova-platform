@@ -15,7 +15,7 @@ public sealed class PrivateDriverMediaStoreTests
             "driver-a", "DrivingLicence", "application/pdf", content, CancellationToken.None);
 
         Assert.NotNull(upload);
-        Assert.True(upload.Reference.StartsWith("drvmedia_", StringComparison.Ordinal));
+        Assert.StartsWith("drvmedia_", upload.Reference, StringComparison.Ordinal);
         Assert.False(upload.Reference.Contains("driver-a", StringComparison.Ordinal));
         Assert.Equal("Clean", upload.ScanStatus);
         Assert.True(await store.IsOwnedAndCleanAsync(
@@ -68,5 +68,24 @@ public sealed class PrivateDriverMediaStoreTests
             "driver-a", "ProfilePhoto", "image/jpeg", new byte[] { 1 }, CancellationToken.None));
         Assert.False(await store.IsOwnedAndCleanAsync(
             "driver-a", "ProfilePhoto", "drvmedia_unknown", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task UnavailableProviderHonorsCancellationForEveryOperation()
+    {
+        var store = new UnavailablePrivateDriverMediaStore();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await store.StoreAsync(
+                "driver-a", "ProfilePhoto", "image/jpeg", new byte[] { 1 }, cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await store.ReadAsync("driver-a", "drvmedia_unknown", cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await store.IsOwnedAndCleanAsync(
+                "driver-a", "ProfilePhoto", "drvmedia_unknown", cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await store.DeleteAsync("driver-a", "drvmedia_unknown", cancellation.Token));
     }
 }

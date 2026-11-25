@@ -94,6 +94,69 @@ public sealed class UnionCreateIfAbsentTests
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact]
+    public async Task CosmosCreateConflictPreservesCancellation()
+    {
+        var union = CreateUnion();
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        container.Setup(value => value.CreateItemAsync(
+                It.IsAny<DriverUnion>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<DriverUnion>>(
+                    new CosmosException("union conflict", HttpStatusCode.Conflict, 0, "union-create-test", 0));
+            });
+
+        var inMemoryUnions = new ConcurrentDictionary<string, DriverUnion>();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            UnionCreateIfAbsent.TryCreateAsync(
+                container.Object, inMemoryUnions, union, cancellation.Token));
+
+        Assert.Empty(inMemoryUnions);
+        container.Verify(value => value.CreateItemAsync(
+            It.IsAny<DriverUnion>(),
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task CosmosCreateReturnsCommittedUnionWhenCancellationArrivesAfterWrite()
+    {
+        var union = CreateUnion();
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        container.Setup(value => value.CreateItemAsync(
+                It.IsAny<DriverUnion>(),
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(Mock.Of<ItemResponse<DriverUnion>>());
+            });
+
+        var inMemoryUnions = new ConcurrentDictionary<string, DriverUnion>();
+        var created = await UnionCreateIfAbsent.TryCreateAsync(
+            container.Object, inMemoryUnions, union, cancellation.Token);
+
+        Assert.True(created);
+        Assert.Empty(inMemoryUnions);
+        container.Verify(value => value.CreateItemAsync(
+            It.IsAny<DriverUnion>(),
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
     private static DriverUnion CreateUnion()
     {
         var now = DateTimeOffset.UtcNow;

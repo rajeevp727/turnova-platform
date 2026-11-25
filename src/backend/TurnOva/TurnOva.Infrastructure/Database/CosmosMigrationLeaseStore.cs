@@ -19,6 +19,7 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         DateTimeOffset expiresAtUtc,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ArgumentException.ThrowIfNullOrWhiteSpace(owner);
 
         var document = new CosmosMigrationLeaseDocument
@@ -30,26 +31,33 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
 
         try
         {
-            var response = await locks.CreateItemAsync(
-                document, new PartitionKey(document.Id), cancellationToken: cancellationToken);
-            return ToLease(response.Resource, response.ETag, owner);
+            var response = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => locks.CreateItemAsync(
+                    document, new PartitionKey(document.Id), cancellationToken: cancellationToken),
+                cancellationToken);
+            return ReadLeaseResponse(response, owner, CancellationToken.None);
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return null;
         }
     }
 
     public async Task<CosmosMigrationLease?> ReadAsync(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            var response = await locks.ReadItemAsync<CosmosMigrationLeaseDocument>(
-                LeaseId, new PartitionKey(LeaseId), cancellationToken: cancellationToken);
-            return ToLease(response.Resource, response.ETag);
+            var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => locks.ReadItemAsync<CosmosMigrationLeaseDocument>(
+                    LeaseId, new PartitionKey(LeaseId), cancellationToken: cancellationToken),
+                cancellationToken);
+            return ReadLeaseResponse(response, expectedOwner: null, cancellationToken);
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return null;
         }
     }
@@ -60,6 +68,7 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         DateTimeOffset expiresAtUtc,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(expected);
         if (!string.Equals(expected.Id, LeaseId, StringComparison.Ordinal) ||
             string.IsNullOrWhiteSpace(expected.Owner) ||
@@ -77,17 +86,20 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
 
         try
         {
-            var response = await locks.ReplaceItemAsync(
-                replacement,
-                replacement.Id,
-                new PartitionKey(replacement.Id),
-                new ItemRequestOptions { IfMatchEtag = expected.ETag },
+            var response = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => locks.ReplaceItemAsync(
+                    replacement,
+                    replacement.Id,
+                    new PartitionKey(replacement.Id),
+                    new ItemRequestOptions { IfMatchEtag = expected.ETag },
+                    cancellationToken),
                 cancellationToken);
-            return ToLease(response.Resource, response.ETag, newOwner);
+            return ReadLeaseResponse(response, newOwner, CancellationToken.None);
         }
         catch (CosmosException ex) when (
             ex.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.PreconditionFailed)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             // The lease disappeared or another runner replaced it after the read.
             // Both outcomes mean this acquisition/renewal attempt lost its race.
             return null;
@@ -98,6 +110,7 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         CosmosMigrationLease expected,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(expected);
         if (!string.Equals(expected.Id, LeaseId, StringComparison.Ordinal) ||
             string.IsNullOrWhiteSpace(expected.Owner) ||
@@ -106,19 +119,43 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
 
         try
         {
-            await locks.DeleteItemAsync<CosmosMigrationLeaseDocument>(
-                expected.Id,
-                new PartitionKey(expected.Id),
-                new ItemRequestOptions { IfMatchEtag = expected.ETag },
+            _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => locks.DeleteItemAsync<CosmosMigrationLeaseDocument>(
+                    expected.Id,
+                    new PartitionKey(expected.Id),
+                    new ItemRequestOptions { IfMatchEtag = expected.ETag },
+                    cancellationToken),
                 cancellationToken);
             return true;
         }
         catch (CosmosException ex) when (
             ex.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.PreconditionFailed)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             // Never delete a lease that another API instance has replaced.
             return false;
         }
+    }
+
+    private static CosmosMigrationLease ReadLeaseResponse(
+        ItemResponse<CosmosMigrationLeaseDocument> response,
+        string? expectedOwner,
+        CancellationToken cancellationToken)
+    {
+        const string invalidMetadataMessage =
+            "Cosmos returned migration lease metadata that does not match the expected ID, owner and ETag.";
+
+        var document = CosmosReadResponseGuard.ReadResource(
+            response,
+            item => string.Equals(item.Id, LeaseId, StringComparison.Ordinal) &&
+                !string.IsNullOrWhiteSpace(item.Owner),
+            "migration lease",
+            cancellationToken,
+            invalidMetadataMessage,
+            invalidMetadataMessage);
+        var etag = CosmosReadResponseGuard.ReadResponseEtag(
+            response, static itemResponse => itemResponse.ETag, cancellationToken);
+        return ToLease(document, etag, expectedOwner);
     }
 
     private static CosmosMigrationLease ToLease(

@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Reflection;
 using System.Text.Json;
 using TurnOva.Application.Dispatch;
 using TurnOva.Domain.Dispatch;
@@ -7,6 +9,214 @@ namespace TurnOva.Tests;
 
 public sealed class QueueStoreTests
 {
+    [Fact]
+    public async Task GetEligibleAsyncHonorsPreCancelledTokenBeforeReturningQueue()
+    {
+        var store = new InMemoryQueueStore();
+        await store.AddAsync(Entry("driver-1", "zone-a", "Cab", DateTimeOffset.UtcNow), CancellationToken.None);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.GetEligibleAsync("zone-a", "Cab", cancellation.Token));
+    }
+
+    [Fact]
+    public async Task GetEligibleAsyncHonorsCancellationAfterWaitingForQueueLockWithoutReturningSnapshot()
+    {
+        var store = new InMemoryQueueStore();
+        await store.AddAsync(Entry("driver-1", "zone-a", "Cab", DateTimeOffset.UtcNow), CancellationToken.None);
+        using var cancellation = new CancellationTokenSource();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            InvokeWhileQueueLockHeldAsync(
+                store,
+                () => store.GetEligibleAsync("zone-a", "Cab", cancellation.Token),
+                cancellation));
+
+        Assert.Equal(new[] { "driver-1" },
+            (await store.GetEligibleAsync("zone-a", "Cab", CancellationToken.None)).Select(entry => entry.DriverId));
+    }
+
+    [Fact]
+    public async Task AddAsyncHonorsPreCancelledTokenBeforeQueueOrAuditMutation()
+    {
+        var store = new InMemoryQueueStore();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.AddAsync(Entry("driver-1", "zone-a", "Cab", DateTimeOffset.UtcNow), cancellation.Token));
+
+        Assert.Empty(await store.GetEligibleAsync("zone-a", "Cab", CancellationToken.None));
+        Assert.Empty(await store.GetAuditEventsAsync("zone-a", "Cab", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task AddAsyncRejectsNullEntryBeforeQueueOrAuditMutation()
+    {
+        var store = new InMemoryQueueStore();
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            store.AddAsync(null!, CancellationToken.None));
+
+        Assert.Empty(await store.GetEligibleAsync("zone-a", "Cab", CancellationToken.None));
+        Assert.Empty(await store.GetAuditEventsAsync("zone-a", "Cab", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task AddAsyncCancellationTakesPrecedenceOverNullEntry()
+    {
+        var store = new InMemoryQueueStore();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            store.AddAsync(null!, cancellation.Token));
+
+        Assert.Empty(await store.GetEligibleAsync("zone-a", "Cab", CancellationToken.None));
+        Assert.Empty(await store.GetAuditEventsAsync("zone-a", "Cab", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task QueueServiceMoveToBackHonorsCancellationBeforeInputValidation()
+    {
+        var store = new InMemoryQueueStore();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new QueueService(store).MoveToBackAsync(" ", "zone-a", "Cab", cancellation.Token));
+    }
+
+    [Fact]
+    public async Task QueueServiceLeaveHonorsCancellationBeforeInputValidation()
+    {
+        var store = new InMemoryQueueStore();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new QueueService(store).LeaveAsync(" ", "zone-a", "Cab", cancellation.Token));
+    }
+
+    [Fact]
+    public async Task QueueServiceRecordDispatchExceptionHonorsCancellationBeforeInputValidation()
+    {
+        var store = new InMemoryQueueStore();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new QueueService(store).RecordDispatchExceptionAsync(
+                " ", " ", " ", " ", "unknown", cancellation.Token));
+
+        Assert.Empty(await store.GetAuditEventsAsync("zone-a", "Cab", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task QueueServiceJoinRejectsNullEntryBeforeStoreMutation()
+    {
+        var store = new InMemoryQueueStore();
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            new QueueService(store).JoinAsync(null!, CancellationToken.None));
+
+        Assert.Empty(await store.GetEligibleAsync("zone-a", "Cab", CancellationToken.None));
+        Assert.Empty(await store.GetAuditEventsAsync("zone-a", "Cab", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task QueueServiceJoinRejectsDefaultTimestampBeforeStoreMutation()
+    {
+        var store = new InMemoryQueueStore();
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            new QueueService(store).JoinAsync(
+                Entry("driver-1", "zone-a", "Cab", default), CancellationToken.None));
+
+        Assert.Empty(await store.GetEligibleAsync("zone-a", "Cab", CancellationToken.None));
+        Assert.Empty(await store.GetAuditEventsAsync("zone-a", "Cab", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task QueueServiceJoinHonorsCancellationBeforeNullValidation()
+    {
+        var store = new InMemoryQueueStore();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new QueueService(store).JoinAsync(null!, cancellation.Token));
+
+        Assert.Empty(await store.GetEligibleAsync("zone-a", "Cab", CancellationToken.None));
+        Assert.Empty(await store.GetAuditEventsAsync("zone-a", "Cab", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task RemoveAsyncHonorsCancellationAfterWaitingForQueueLockWithoutMutation()
+    {
+        var store = new InMemoryQueueStore();
+        await store.AddAsync(Entry("driver-a", "zone-a", "Cab", DateTimeOffset.UtcNow), CancellationToken.None);
+        var auditCount = (await store.GetAuditEventsAsync("zone-a", "Cab", CancellationToken.None)).Count;
+        using var cancellation = new CancellationTokenSource();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            InvokeWhileQueueLockHeldAsync(
+                store,
+                () => store.RemoveAsync("driver-a", "zone-a", "Cab", cancellation.Token),
+                cancellation));
+
+        Assert.Equal(new[] { "driver-a" },
+            (await store.GetEligibleAsync("zone-a", "Cab", CancellationToken.None)).Select(entry => entry.DriverId));
+        Assert.Equal(auditCount,
+            (await store.GetAuditEventsAsync("zone-a", "Cab", CancellationToken.None)).Count);
+    }
+
+    [Fact]
+    public async Task MoveToBackAsyncHonorsCancellationAfterWaitingForQueueLockWithoutMutation()
+    {
+        var store = new InMemoryQueueStore();
+        var joinedAt = DateTimeOffset.UtcNow;
+        await store.AddAsync(Entry("driver-a", "zone-a", "Cab", joinedAt), CancellationToken.None);
+        await store.AddAsync(Entry("driver-b", "zone-a", "Cab", joinedAt.AddSeconds(1)), CancellationToken.None);
+        var auditCount = (await store.GetAuditEventsAsync("zone-a", "Cab", CancellationToken.None)).Count;
+        using var cancellation = new CancellationTokenSource();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            InvokeWhileQueueLockHeldAsync(
+                store,
+                () => store.MoveToBackAsync("driver-a", "zone-a", "Cab", cancellation.Token),
+                cancellation));
+
+        Assert.Equal(new[] { "driver-a", "driver-b" },
+            (await store.GetEligibleAsync("zone-a", "Cab", CancellationToken.None)).Select(entry => entry.DriverId));
+        Assert.Equal(auditCount,
+            (await store.GetAuditEventsAsync("zone-a", "Cab", CancellationToken.None)).Count);
+    }
+
+    [Fact]
+    public async Task MoveToBackOnceAsyncHonorsCancellationAfterWaitingForQueueLockWithoutMutation()
+    {
+        var store = new InMemoryQueueStore();
+        var joinedAt = DateTimeOffset.UtcNow;
+        await store.AddAsync(Entry("driver-a", "zone-a", "Cab", joinedAt), CancellationToken.None);
+        await store.AddAsync(Entry("driver-b", "zone-a", "Cab", joinedAt.AddSeconds(1)), CancellationToken.None);
+        var auditCount = (await store.GetAuditEventsAsync("zone-a", "Cab", CancellationToken.None)).Count;
+        using var cancellation = new CancellationTokenSource();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            InvokeWhileQueueLockHeldAsync(
+                store,
+                () => store.MoveToBackOnceAsync("driver-a", "zone-a", "Cab", "offer-1", cancellation.Token),
+                cancellation));
+
+        Assert.Equal(new[] { "driver-a", "driver-b" },
+            (await store.GetEligibleAsync("zone-a", "Cab", CancellationToken.None)).Select(entry => entry.DriverId));
+        Assert.Equal(auditCount,
+            (await store.GetAuditEventsAsync("zone-a", "Cab", CancellationToken.None)).Count);
+    }
+
     [Fact]
     public async Task RemoveAsync_RemovesOnlyTheMatchingQueueMembership()
     {
@@ -67,7 +277,7 @@ public sealed class QueueStoreTests
             }
         }));
 
-        Assert.Single(attempts.Where(succeeded => succeeded));
+        Assert.Single(attempts, succeeded => succeeded);
         var queue = await store.GetEligibleAsync("zone-a", "auto", CancellationToken.None);
         Assert.Single(queue);
         Assert.Equal("driver-concurrent-join", queue[0].DriverId);
@@ -188,10 +398,10 @@ public sealed class QueueStoreTests
         var events = await store.GetAuditEventsAsync("zone-a", "auto", CancellationToken.None);
         Assert.Equal(5, events.Count);
         Assert.Equal(2, events.Count(item => item.EventType == QueueAuditEventTypes.Joined));
-        Assert.Single(events.Where(item => item.EventType == QueueAuditEventTypes.RotatedToBack));
-        Assert.Single(events.Where(item => item.EventType == QueueAuditEventTypes.Left));
-        Assert.Single(events.Where(item => item.EventType == QueueAuditEventTypes.MovedToBack));
-        Assert.Equal("offer-1", Assert.Single(events.Where(item => item.EventType == QueueAuditEventTypes.RotatedToBack)).OfferId);
+        Assert.Single(events, item => item.EventType == QueueAuditEventTypes.RotatedToBack);
+        Assert.Single(events, item => item.EventType == QueueAuditEventTypes.Left);
+        Assert.Single(events, item => item.EventType == QueueAuditEventTypes.MovedToBack);
+        Assert.Equal("offer-1", Assert.Single(events, item => item.EventType == QueueAuditEventTypes.RotatedToBack).OfferId);
         Assert.All(events, item => Assert.Equal("zone-a|auto", item.ZoneServiceKey));
         Assert.DoesNotContain(events, item => item.DriverId == "driver-c");
         Assert.DoesNotContain(events, item => item.EventType == QueueAuditEventTypes.DispatchException);
@@ -306,5 +516,50 @@ public sealed class QueueStoreTests
                 cancellation.Token));
 
         Assert.Empty(await store.GetAuditEventsAsync("zone-a", "cab", CancellationToken.None));
+    }
+
+    private static object GetQueueLock(InMemoryQueueStore store)
+    {
+        var field = typeof(InMemoryQueueStore).GetField("_queues", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("The in-memory queue dictionary was not found.");
+        var entries = (IEnumerable)field.GetValue(store)!;
+        var entry = Assert.Single(entries.Cast<object>());
+        return entry.GetType().GetProperty("Value")?.GetValue(entry)
+            ?? throw new InvalidOperationException("The in-memory queue lock was not found.");
+    }
+
+    private static async Task<T> InvokeWhileQueueLockHeldAsync<T>(
+        InMemoryQueueStore store,
+        Func<Task<T>> operation,
+        CancellationTokenSource cancellation)
+    {
+        var queueLock = GetQueueLock(store);
+        using var started = new ManualResetEventSlim();
+        Thread? workerThread = null;
+        Task<T> task;
+
+        lock (queueLock)
+        {
+            task = Task.Factory.StartNew(
+                () =>
+                {
+                    workerThread = Thread.CurrentThread;
+                    started.Set();
+                    return operation().GetAwaiter().GetResult();
+                },
+                CancellationToken.None,
+                TaskCreationOptions.LongRunning,
+                TaskScheduler.Default);
+
+            Assert.True(started.Wait(TimeSpan.FromSeconds(5)), "The queue operation worker did not start.");
+            Assert.True(
+                SpinWait.SpinUntil(
+                    () => workerThread is not null && workerThread.ThreadState.HasFlag(ThreadState.WaitSleepJoin),
+                    TimeSpan.FromSeconds(5)),
+                "The queue operation did not wait for the held queue lock.");
+            cancellation.Cancel();
+        }
+
+        return await task;
     }
 }

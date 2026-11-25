@@ -4,6 +4,7 @@ using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Options;
 using TurnOva.Application.Dispatch;
 using TurnOva.Domain.Dispatch;
+using TurnOva.Infrastructure.Database;
 
 namespace TurnOva.API;
 
@@ -16,12 +17,15 @@ public sealed class RideOfferAdvancer(
 {
     public async Task<bool> AdvanceAsync(string rideId, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var current = await offers.GetByRideAsync(rideId, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         if (current is null || current.IsPending ||
             current.Status is not (RideOfferStatuses.Rejected or RideOfferStatuses.Expired) ||
             string.IsNullOrWhiteSpace(current.ETag)) return false;
 
         var ride = await GetRideAsync(rideId, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         if (ride is null || ride.Status != "Requested" ||
             !string.Equals(ride.DispatchZoneId, current.ZoneId, StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(ride.ServiceClass, current.ServiceClass, StringComparison.OrdinalIgnoreCase)) return false;
@@ -31,11 +35,13 @@ public sealed class RideOfferAdvancer(
         {
             cancellationToken.ThrowIfCancellationRequested();
             var profile = await GetProfileAsync(candidate.DriverId, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             if (profile is null || profile.Status != "Approved" || profile.AvailabilityStatus != "Online" ||
                 profile.PassengerCapacity < ride.Passengers ||
                 !string.Equals(profile.ZoneId, current.ZoneId, StringComparison.OrdinalIgnoreCase) ||
                 !string.Equals(profile.ServiceClass, current.ServiceClass, StringComparison.OrdinalIgnoreCase))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 await queues.RemoveAsync(candidate.DriverId, current.ZoneId, current.ServiceClass, cancellationToken);
                 continue;
             }
@@ -51,6 +57,7 @@ public sealed class RideOfferAdvancer(
                 Status = RideOfferStatuses.Pending,
                 Attempts = current.Attempts.Append(attempt).ToArray(), ETag = null
             };
+            cancellationToken.ThrowIfCancellationRequested();
             if (!await offers.TryReplaceAsync(next, current.ETag, cancellationToken)) return false;
             return true;
         }
@@ -59,15 +66,55 @@ public sealed class RideOfferAdvancer(
 
     private async Task<global::DemoRide?> GetRideAsync(string rideId, CancellationToken ct)
     {
-        if (rideContainer is null) return inMemoryRides.TryGetValue(rideId, out var ride) ? ride : null;
-        try { return (await rideContainer.ReadItemAsync<global::DemoRide>(rideId, new PartitionKey(rideId), cancellationToken: ct)).Resource; }
+        ct.ThrowIfCancellationRequested();
+        if (rideContainer is null)
+        {
+            if (!inMemoryRides.TryGetValue(rideId, out var ride)) return null;
+            if (!string.Equals(ride.RideId, rideId, StringComparison.Ordinal))
+                throw new InvalidOperationException("The Ride snapshot identity does not match the requested Ride.");
+            return ride;
+        }
+
+        try
+        {
+            var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => rideContainer!.ReadItemAsync<global::DemoRide>(
+                    rideId, new PartitionKey(rideId), cancellationToken: ct),
+                ct);
+            return CosmosReadResponseGuard.ReadResource(
+                response,
+                item => string.Equals(item.RideId, rideId, StringComparison.Ordinal),
+                "Ride",
+                ct);
+        }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
     }
 
     private async Task<DriverOnboardingProfile?> GetProfileAsync(string driverId, CancellationToken ct)
     {
-        if (driverContainer is null) return inMemoryProfiles.TryGetValue(driverId, out var profile) ? profile : null;
-        try { return (await driverContainer.ReadItemAsync<DriverOnboardingProfile>(driverId, new PartitionKey(driverId), cancellationToken: ct)).Resource; }
+        ct.ThrowIfCancellationRequested();
+        if (driverContainer is null)
+        {
+            if (!inMemoryProfiles.TryGetValue(driverId, out var profile)) return null;
+            if (!string.Equals(profile.Id, driverId, StringComparison.Ordinal) ||
+                !string.Equals(profile.DriverId, driverId, StringComparison.Ordinal))
+                throw new InvalidOperationException("The Driver profile identity does not match the requested Driver.");
+            return profile;
+        }
+
+        try
+        {
+            var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => driverContainer!.ReadItemAsync<DriverOnboardingProfile>(
+                    driverId, new PartitionKey(driverId), cancellationToken: ct),
+                ct);
+            return CosmosReadResponseGuard.ReadResource(
+                response,
+                item => string.Equals(item.Id, driverId, StringComparison.Ordinal) &&
+                    string.Equals(item.DriverId, driverId, StringComparison.Ordinal),
+                "Driver profile",
+                ct);
+        }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { return null; }
     }
 }
