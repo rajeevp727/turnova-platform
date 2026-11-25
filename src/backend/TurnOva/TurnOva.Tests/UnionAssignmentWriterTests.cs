@@ -575,6 +575,38 @@ public sealed class UnionAssignmentWriterTests
             .ReturnsAsync(response);
     }
 
+    [Fact]
+    public async Task CosmosCreateReturnsCommittedAssignmentWhenCancellationArrivesAfterWrite()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var assignment = CreateAssignment();
+        var created = new Mock<ItemResponse<DriverUnionAssignment>>(MockBehavior.Strict);
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.CreateItemAsync<DriverUnionAssignment>(
+                assignment,
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(created.Object);
+            });
+
+        var result = await UnionAssignmentWriter.TrySaveAsync(
+            container.Object,
+            new ConcurrentDictionary<string, DriverUnionAssignment>(),
+            assignment,
+            expectedCurrent: null,
+            cancellation.Token);
+
+        Assert.True(result);
+        container.Verify(value => value.CreateItemAsync<DriverUnionAssignment>(
+            assignment, It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
     private static DriverUnionAssignment CreateAssignment()
     {
         var assignedAt = DateTimeOffset.Parse("2026-11-22T18:00:00Z");
