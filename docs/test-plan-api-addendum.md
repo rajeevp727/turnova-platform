@@ -1,4 +1,17 @@
-# API Test Plan Addendum — 2026-11-25 (Run 159)
+# API Test Plan Addendum — 2026-11-26 (Run 191)
+
+## Cosmos queue ordering round-trip and write validation — Run 191
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| COSMOS-STORE-037 | A persisted queue item has a positive `Sequence` that does not equal `JoinedAt.UtcTicks`; a valid Cosmos queue join is read back under the same invariant | `CosmosQueueResourceContractTests.QueueEligibilityRejectsMissingJoinTimestampOrSequenceThatDoesNotMatchUtcTicks`; `CosmosQueueCancellationTests.QueueJoinRemainsSuccessfulWhenCancellationArrivesAfterAtomicCommit` | Malformed ordering metadata fails closed; valid writer output preserves exact UTC-tick sequence metadata |
+| COSMOS-STORE-038 | A queue join is attempted with a default `JoinedAt` timestamp | `CosmosQueueResourceContractTests.QueueJoinRejectsDefaultTimestampBeforeCreatingTransactionalBatch` | `CosmosQueueStore.AddAsync` throws before creating a Cosmos transactional batch |
+
+`CosmosQueueStore.RequireEligibleQueryItem` now requires `Sequence == JoinedAt.UtcTicks`, matching the existing Cosmos write contract. `CosmosQueueStore.AddAsync` rejects a default join timestamp before persistence. This protects internal FIFO snapshot integrity without changing the ordering algorithm, Rider ranking, customer-facing assignment, schema or mobile source.
+
+Exact source/test head [`504ec1accb1d7acf5523eb97e5beaba83bf7de8a`](https://github.com/rajeevp727/turnova-platform/commit/504ec1accb1d7acf5523eb97e5beaba83bf7de8a) passed API-only CI [#45681128508](https://github.com/rajeevp727/turnova-platform/actions/runs/45681128508): **1,712/1,712 backend tests (0 failed, 0 skipped)**; .NET 10 Release build (0 warnings, 0 errors); native non-container Linux x64 publish (44,087,248 bytes); publish-script syntax; verifier (11 negative fixtures plus valid fixture); artifact [15055460209](https://github.com/rajeevp727/turnova-platform/actions/runs/45681128508/artifacts/15055460209), 17,041,246 bytes, SHA-256 `b0862ee5a39e1ff7d74b88c0c2567d3f6ed633e123d658ffce18e95b783a09aa`. Mobile-auth/mobile/Android/emulator/iOS/simulator jobs were intentionally skipped under the API-first phase gate.
+
+These are deterministic SDK-mock and native publish checks only; live Cosmos ETag, transaction, partition, multi-instance, restart and failover behavior remains an external gate. Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked); no acceptance row is promoted.
 
 ## Queue eligibility ordering metadata — Run 190
 
