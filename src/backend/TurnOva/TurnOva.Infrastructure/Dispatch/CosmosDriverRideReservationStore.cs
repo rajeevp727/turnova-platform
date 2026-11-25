@@ -46,10 +46,12 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
 
             // Reservation and audit fact share the existing /driverId partition. A batch makes
             // the lock visible only when its append-only audit event is committed as well.
-            using var batch = await container.CreateTransactionalBatch(new PartitionKey(driverId))
-                .CreateItem(reservation)
-                .CreateItem(auditEvent)
-                .ExecuteAsync(cancellationToken);
+            using var batch = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => container.CreateTransactionalBatch(new PartitionKey(driverId))
+                    .CreateItem(reservation)
+                    .CreateItem(auditEvent)
+                    .ExecuteAsync(cancellationToken),
+                cancellationToken);
 
             if (batch.IsSuccessStatusCode)
                 return true;
@@ -122,10 +124,12 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
             var auditEvent = DriverRideReservationAuditEvent.Create(
                 updated, DriverRideReservationAuditEventTypes.MadePermanent, auditContext,
                 currentReservation.ExpiresAtUtc, expiresAtUtc: null);
-            using var batch = await container.CreateTransactionalBatch(new PartitionKey(driverId))
-                .ReplaceItem(driverId, updated, new TransactionalBatchItemRequestOptions { IfMatchEtag = etag })
-                .CreateItem(auditEvent)
-                .ExecuteAsync(cancellationToken);
+            using var batch = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => container.CreateTransactionalBatch(new PartitionKey(driverId))
+                    .ReplaceItem(driverId, updated, new TransactionalBatchItemRequestOptions { IfMatchEtag = etag })
+                    .CreateItem(auditEvent)
+                    .ExecuteAsync(cancellationToken),
+                cancellationToken);
 
             if (batch.IsSuccessStatusCode)
                 return true;
@@ -176,10 +180,12 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
             var auditEvent = DriverRideReservationAuditEvent.Create(
                 updated, DriverRideReservationAuditEventTypes.ExpiryChanged, auditContext,
                 currentReservation.ExpiresAtUtc, expiresAtUtc);
-            using var batch = await container.CreateTransactionalBatch(new PartitionKey(driverId))
-                .ReplaceItem(driverId, updated, new TransactionalBatchItemRequestOptions { IfMatchEtag = etag })
-                .CreateItem(auditEvent)
-                .ExecuteAsync(cancellationToken);
+            using var batch = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => container.CreateTransactionalBatch(new PartitionKey(driverId))
+                    .ReplaceItem(driverId, updated, new TransactionalBatchItemRequestOptions { IfMatchEtag = etag })
+                    .CreateItem(auditEvent)
+                    .ExecuteAsync(cancellationToken),
+                cancellationToken);
 
             if (batch.IsSuccessStatusCode)
                 return true;
@@ -285,10 +291,12 @@ public sealed class CosmosDriverRideReservationStore(Container container) : IDri
             var auditEvent = DriverRideReservationAuditEvent.Create(
                 currentReservation, DriverRideReservationAuditEventTypes.Released, auditContext,
                 currentReservation.ExpiresAtUtc, expiresAtUtc: null);
-            using var batch = await container.CreateTransactionalBatch(new PartitionKey(driverId))
-                .DeleteItem(driverId, new TransactionalBatchItemRequestOptions { IfMatchEtag = etag })
-                .CreateItem(auditEvent)
-                .ExecuteAsync(cancellationToken);
+            using var batch = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => container.CreateTransactionalBatch(new PartitionKey(driverId))
+                    .DeleteItem(driverId, new TransactionalBatchItemRequestOptions { IfMatchEtag = etag })
+                    .CreateItem(auditEvent)
+                    .ExecuteAsync(cancellationToken),
+                cancellationToken);
 
             if (batch.IsSuccessStatusCode)
                 return true;
