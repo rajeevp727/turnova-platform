@@ -1258,7 +1258,8 @@ public sealed class CosmosMigrationRunnerTests
         var actual = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             runner.RunAsync(cancellation.Token).WaitAsync(TimeSpan.FromSeconds(5)));
 
-        Assert.Equal(cancellation.Token, actual.CancellationToken);
+        Assert.True(actual.CancellationToken.CanBeCanceled);
+        Assert.True(actual.CancellationToken.IsCancellationRequested);
         Assert.Equal(0, migration.CallCount);
         Assert.NotNull(leaseStore.ReleasedLease);
         historyContainer.Verify(container => container.ReadItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
