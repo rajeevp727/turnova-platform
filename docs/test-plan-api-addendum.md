@@ -211,3 +211,11 @@ This is deterministic SDK-mock and native-publish evidence only. It does not est
 | AI-PRIVACY-001 | Rider trip-intent text contains synthetic identity, contact, precise coordinates, licence/KYC, bank-account, payment-token and bearer-token-shaped values | `AiAssistanceServiceTests.ProviderReceivesOnlyRedactedTripTokensAndCannotReplaceRoute` | The provider receives only the fixed `[PICKUP]`/`[DROPOFF]` placeholders and allow-listed generic trip-action words; none of the synthetic sensitive values or raw pickup/destination text appears in the provider prompt. The local editable Cab draft retains its parsed pickup/dropoff and still requires Rider confirmation. |
 
 Source/test commit [`952d8a6d3bf23464de3b58cec44d3d660a8577d8`](https://github.com/rajeevp727/turnova-platform/commit/952d8a6d3bf23464de3b58cec44d3d660a8577d8). Fresh exact-head API-only CI is pending; the prior passing run [#45598764966](https://github.com/rajeevp727/turnova-platform/actions/runs/45598764966) applies to the previous head only. This supplemental AI-01 evidence does not promote any of the 19 acceptance rows. No live AI provider, model or credentials are configured.
+
+## Run 172 — Cab-only UnionManager member-list scope
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| UNION-SCOPE-002 | A UnionManager has signed claims for an active Cab-serving Union and an active non-Cab Union that retains a stale active Cab assignment | `RideApiIntegrationTests.UnionManagerMemberListExcludesAssignmentsFromUnionsThatNoLongerServeCab` | `GET /api/v1/union/drivers` returns only the Cab-serving Union's active Cab driver. The non-Cab Union's stale assignment is not exposed. |
+
+The API member-list guard now requires the claimed Union to exist, be Active and explicitly include Cab in its service classes. Runtime commit [`d0ffc527d47e2f1b8833e9dcb38dc13d8846d8d4`](https://github.com/rajeevp727/turnova-platform/commit/d0ffc527d47e2f1b8833e9dcb38dc13d8846d8d4); deterministic regression commit [`6e5d34a1af481cf29e3419158265990bce60ef74`](https://github.com/rajeevp727/turnova-platform/commit/6e5d34a1af481cf29e3419158265990bce60ef74). Exact-head API-only CI is pending. This test does not prove live Cosmos or production identity-provider behavior and does not promote an acceptance row.
