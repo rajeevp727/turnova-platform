@@ -208,6 +208,81 @@ public sealed class CosmosRideIdempotencyCleanupTests
         container.VerifyNoOtherCalls();
     }
     [Fact]
+    public async Task DeleteProviderFailureTakesPrecedenceOverCancellation()
+    {
+        var createdAt = DateTimeOffset.UtcNow;
+        var record = new RideIdempotencyRecord(KeyId, RiderId, RideId, RequestHash, createdAt);
+        var read = new Mock<ItemResponse<RideIdempotencyRecord>>();
+        read.SetupGet(value => value.Resource).Returns(record);
+        read.SetupGet(value => value.ETag).Returns("observed-etag");
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        container.Setup(value => value.ReadItemAsync<RideIdempotencyRecord>(
+                KeyId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        container.Setup(value => value.DeleteItemAsync<RideIdempotencyRecord>(
+                KeyId, It.IsAny<PartitionKey>(),
+                It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "observed-etag"),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<RideIdempotencyRecord>>(
+                    new InvalidOperationException("ride idempotency delete failed"));
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            CosmosRideIdempotencyCleanup.TryDeleteExactAsync(
+                container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId,
+                RequestHash, createdAt, cancellation.Token));
+
+        container.Verify(value => value.ReadItemAsync<RideIdempotencyRecord>(
+            KeyId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.DeleteItemAsync<RideIdempotencyRecord>(
+            KeyId, It.IsAny<PartitionKey>(),
+            It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "observed-etag"),
+            It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task SuccessfulDeleteRemainsAuthoritativeWhenCancellationArrivesAfterCommit()
+    {
+        var createdAt = DateTimeOffset.UtcNow;
+        var record = new RideIdempotencyRecord(KeyId, RiderId, RideId, RequestHash, createdAt);
+        var read = new Mock<ItemResponse<RideIdempotencyRecord>>();
+        read.SetupGet(value => value.Resource).Returns(record);
+        read.SetupGet(value => value.ETag).Returns("observed-etag");
+        var container = new Mock<Container>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        container.Setup(value => value.ReadItemAsync<RideIdempotencyRecord>(
+                KeyId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        container.Setup(value => value.DeleteItemAsync<RideIdempotencyRecord>(
+                KeyId, It.IsAny<PartitionKey>(),
+                It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "observed-etag"),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(Mock.Of<ItemResponse<RideIdempotencyRecord>>());
+            });
+
+        var deleted = await CosmosRideIdempotencyCleanup.TryDeleteExactAsync(
+            container.Object, KeyId, new PartitionKey(RiderId), RiderId, RideId,
+            RequestHash, createdAt, cancellation.Token);
+
+        Assert.True(deleted);
+        container.Verify(value => value.ReadItemAsync<RideIdempotencyRecord>(
+            KeyId, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.DeleteItemAsync<RideIdempotencyRecord>(
+            KeyId, It.IsAny<PartitionKey>(),
+            It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "observed-etag"),
+            It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task DeletePropagatesNonRaceDeleteProviderFailures()
     {
         var createdAt = DateTimeOffset.UtcNow;
