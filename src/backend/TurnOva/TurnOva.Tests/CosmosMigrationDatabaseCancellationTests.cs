@@ -7,6 +7,59 @@ namespace TurnOva.Tests;
 public sealed class CosmosMigrationDatabaseCancellationTests
 {
     [Fact]
+    public async Task CreateContainerProviderFailureTakesPrecedenceOverCancellation()
+    {
+        var database = new Mock<Database>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        var providerFailure = new InvalidOperationException("container create failed");
+        database.Setup(value => value.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(),
+                It.IsAny<int?>(),
+                It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ContainerResponse>(providerFailure);
+            });
+
+        var actual = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosMigrationDatabase(database.Object).CreateContainerIfNotExistsAsync(
+                "SupportRequests", "/reporterId", cancellation.Token));
+
+        Assert.Equal(cancellation.Token, actual.CancellationToken);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties =>
+                properties.Id == "SupportRequests" && properties.PartitionKeyPath == "/reporterId"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        database.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task CreateContainerProviderFailurePropagatesUnchangedWithoutCancellation()
+    {
+        var database = new Mock<Database>(MockBehavior.Strict);
+        var providerFailure = new InvalidOperationException("container create failed");
+        database.Setup(value => value.CreateContainerIfNotExistsAsync(
+                It.IsAny<ContainerProperties>(),
+                It.IsAny<int?>(),
+                It.IsAny<RequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() => Task.FromException<ContainerResponse>(providerFailure));
+
+        var actual = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosMigrationDatabase(database.Object).CreateContainerIfNotExistsAsync(
+                "SupportRequests", "/reporterId", CancellationToken.None));
+
+        Assert.Same(providerFailure, actual);
+        database.Verify(value => value.CreateContainerIfNotExistsAsync(
+            It.Is<ContainerProperties>(properties =>
+                properties.Id == "SupportRequests" && properties.PartitionKeyPath == "/reporterId"),
+            It.IsAny<int?>(), It.IsAny<RequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
+        database.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task PreCancelledTokenStopsBeforeDatabaseCall()
     {
         var database = new Mock<Database>(MockBehavior.Strict);
