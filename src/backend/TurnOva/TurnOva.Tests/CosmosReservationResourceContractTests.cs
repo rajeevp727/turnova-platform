@@ -140,12 +140,20 @@ public sealed class CosmosReservationResourceContractTests
         container.VerifyNoOtherCalls();
     }
 
-    [Fact]
-    public async Task DriverReleaseRejectsResourceForDifferentDriverBeforeStartingDeleteBatch()
+
+    [Theory]
+    [InlineData("different-driver", "ride-1")]
+    [InlineData("driver-1", " ")]
+    public async Task DriverReleaseRejectsMalformedResourceBeforeEtagHydrationOrDeleteBatch(
+        string resourceDriverId,
+        string resourceRideId)
     {
-        var response = new Mock<ItemResponse<DriverRideReservation>>();
+        var response = new Mock<ItemResponse<DriverRideReservation>>(MockBehavior.Strict);
         response.SetupGet(value => value.Resource)
-            .Returns(new DriverRideReservation("different-driver", "ride-1", DateTimeOffset.UtcNow));
+            .Returns(new DriverRideReservation(
+                resourceDriverId, resourceRideId, DateTimeOffset.UtcNow, null));
+        response.SetupGet(value => value.ETag)
+            .Throws(new InvalidOperationException("ETag must not be read for a malformed reservation."));
         var container = new Mock<Container>(MockBehavior.Strict);
         container.Setup(value => value.ReadItemAsync<DriverRideReservation>(
                 "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
@@ -156,6 +164,9 @@ public sealed class CosmosReservationResourceContractTests
             new CosmosDriverRideReservationStore(container.Object).TryReleaseAsync("driver-1", "ride-1"));
 
         Assert.Equal("Cosmos returned a malformed driver reservation resource.", exception.Message);
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyGet(value => value.ETag, Times.Never);
+        response.VerifyNoOtherCalls();
         container.Verify(value => value.ReadItemAsync<DriverRideReservation>(
             "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
             It.IsAny<CancellationToken>()), Times.Once);
@@ -240,13 +251,26 @@ public sealed class CosmosReservationResourceContractTests
         container.VerifyNoOtherCalls();
     }
 
-    [Fact]
-    public async Task RiderReleaseRejectsResourceForDifferentRiderBeforeStartingDeleteBatch()
+
+    [Theory]
+    [InlineData("different-rider", "ride-1", "request-hash")]
+    [InlineData("rider-1", " ", "request-hash")]
+    [InlineData("rider-1", "ride-1", " ")]
+    public async Task RiderReleaseRejectsMalformedResourceBeforeEtagHydrationOrDeleteBatch(
+        string resourceRiderId,
+        string resourceRideId,
+        string resourceRequestHash)
     {
-        var response = new Mock<ItemResponse<RiderActiveBookingReservation>>();
+        var response = new Mock<ItemResponse<RiderActiveBookingReservation>>(MockBehavior.Strict);
         response.SetupGet(value => value.Resource)
             .Returns(new RiderActiveBookingReservation(
-                "different-rider", "ride-1", "request-hash", DateTimeOffset.UtcNow, null));
+                resourceRiderId,
+                resourceRideId,
+                resourceRequestHash,
+                DateTimeOffset.UtcNow,
+                null));
+        response.SetupGet(value => value.ETag)
+            .Throws(new InvalidOperationException("ETag must not be read for a malformed reservation."));
         var container = new Mock<Container>(MockBehavior.Strict);
         container.Setup(value => value.ReadItemAsync<RiderActiveBookingReservation>(
                 RiderActiveBookingReservation.DocumentId, It.IsAny<PartitionKey>(),
@@ -254,9 +278,13 @@ public sealed class CosmosReservationResourceContractTests
             .ReturnsAsync(response.Object);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new CosmosRiderActiveBookingReservationStore(container.Object).TryReleaseAsync("rider-1", "ride-1"));
+            new CosmosRiderActiveBookingReservationStore(container.Object)
+                .TryReleaseAsync("rider-1", "ride-1"));
 
         Assert.Equal("Cosmos returned a malformed Rider booking reservation resource.", exception.Message);
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyGet(value => value.ETag, Times.Never);
+        response.VerifyNoOtherCalls();
         container.Verify(value => value.ReadItemAsync<RiderActiveBookingReservation>(
             RiderActiveBookingReservation.DocumentId, It.IsAny<PartitionKey>(),
             It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
