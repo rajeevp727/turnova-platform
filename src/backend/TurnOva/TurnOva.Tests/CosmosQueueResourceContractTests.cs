@@ -378,6 +378,41 @@ public sealed class CosmosQueueResourceContractTests
             It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
     }
 
+    [Fact]
+    public async Task QueueAuditReadRejectsMalformedLaterPageInsteadOfReturningPartialHistory()
+    {
+        var iterator = new Mock<FeedIterator<QueueAuditEvent>>();
+        iterator.SetupSequence(value => value.HasMoreResults)
+            .Returns(true)
+            .Returns(true);
+        var validPage = CreatePage(new QueueAuditEvent(
+            "event-1",
+            "hyderabad-central|cab",
+            "driver-1",
+            "Joined",
+            DateTimeOffset.Parse("2026-11-25T00:00:00Z")));
+        var malformedPage = CreatePage(new QueueAuditEvent(
+            "event-2",
+            "another-zone|cab",
+            "driver-2",
+            "Joined",
+            DateTimeOffset.Parse("2026-11-25T00:01:00Z")));
+        iterator.SetupSequence(value => value.ReadNextAsync(CancellationToken.None))
+            .ReturnsAsync(validPage.Object)
+            .ReturnsAsync(malformedPage.Object);
+        var container = CreateQueryContainer(iterator);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosQueueStore(container.Object).GetAuditEventsAsync(
+                "hyderabad-central", "cab", CancellationToken.None));
+
+        Assert.Equal("Cosmos returned a malformed queue audit event query item.", exception.Message);
+        iterator.Verify(value => value.HasMoreResults, Times.Exactly(2));
+        iterator.Verify(value => value.ReadNextAsync(CancellationToken.None), Times.Exactly(2));
+        container.Verify(value => value.GetItemQueryIterator<QueueAuditEvent>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+    }
+
     private static Mock<Container> CreateQueryContainer<T>(Mock<FeedIterator<T>> iterator)
     {
         var container = new Mock<Container>(MockBehavior.Strict);
