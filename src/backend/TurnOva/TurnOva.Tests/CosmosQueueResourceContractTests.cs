@@ -293,6 +293,7 @@ public sealed class CosmosQueueResourceContractTests
     [InlineData(true, 1)]
     [InlineData(false, 0)]
     [InlineData(false, -1)]
+    [InlineData(false, 1)]
     public async Task QueueEligibilityRejectsMissingJoinTimestampOrSequenceThatDoesNotMatchUtcTicks(
         bool useDefaultJoinedAt, long sequence)
     {
