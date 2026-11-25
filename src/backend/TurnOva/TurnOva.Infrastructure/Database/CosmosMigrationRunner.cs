@@ -122,9 +122,11 @@ public sealed class CosmosMigrationRunner(
     {
         cancellationToken.ThrowIfCancellationRequested();
         const string partitionKeyPath = "/id";
-        var response = await database.CreateContainerIfNotExistsAsync(
-            new ContainerProperties(containerName, partitionKeyPath),
-            cancellationToken: cancellationToken);
+        var response = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+            () => database.CreateContainerIfNotExistsAsync(
+                new ContainerProperties(containerName, partitionKeyPath),
+                cancellationToken: cancellationToken),
+            cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
 
         var properties = CosmosReadResponseGuard.ReadResponseResource(
