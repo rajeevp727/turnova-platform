@@ -21,9 +21,11 @@ public sealed class CosmosMigrationDatabase(CosmosDatabase database) : ICosmosMi
         {
             DefaultTimeToLive = defaultTimeToLive
         };
-        var response = await database.CreateContainerIfNotExistsAsync(
-            properties,
-            cancellationToken: cancellationToken);
+        var response = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+            () => database.CreateContainerIfNotExistsAsync(
+                properties,
+                cancellationToken: cancellationToken),
+            cancellationToken);
 
         // Container creation is a committed write. Validate its response without
         // retroactively turning a successful create into cancellation.
