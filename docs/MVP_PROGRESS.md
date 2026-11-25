@@ -720,6 +720,16 @@ Live Cosmos partition/ETag/transaction/multi-instance/restart/RU and failover ev
 - **Engineering:** cancellation-safe SDK response-property hydration now covers shared `ItemResponse.Resource` reads and Cosmos migration `ContainerResponse.Resource` plus `ContainerResponse.Container`. Four new deterministic bootstrap regressions verify cancellation and cancellation precedence over lazy-hydration exceptions. Successful Cosmos write/commit semantics remain unchanged. This is SDK-mock evidence, not live Cosmos proof.
 - **Mobile/platform gating:** API remains active; Android Rider/Driver and iOS Rider/Driver completion work has not started. API-only CI intentionally skips mobile-auth/mobile/Android/emulator/iOS jobs.
 
+## Run 152 — 2026-11-25 — Cosmos migration response hydration regressions
+
+- **Platform gate:** API remains `in_progress`; Android/iOS remain `not_started`. PR [#200](https://github.com/rajeevp727/turnova-platform/pull/200) is the sole ready/active feature PR on `test/api-nondev-support-readiness-20261120`; main/base remains `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`.
+- **TTL response hydration:** added COSMOS-MIG-049..051 for cancellation during `CosmosMigrationDatabase` TTL-read `ContainerResponse.Resource` hydration, cancellation precedence when that getter throws, and unchanged exception propagation without cancellation. All three assert no `ReplaceContainerAsync` call follows cancelled/failed hydration.
+- **Database handle hydration:** added COSMOS-BOOTSTRAP-041 to prove a non-cancelled `DatabaseResponse.Database` getter failure propagates unchanged and stops before any container or lease work.
+- **Runtime scope:** the existing `CosmosReadResponseGuard.ReadResponseResource` behavior already enforced these boundaries. This increment changes tests/docs only; no production runtime behavior changed.
+- **Final exact-head evidence:** [API-only CI #45516145585](https://github.com/rajeevp727/turnova-platform/actions/runs/45516145585) passed **1,552/1,552 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (0 warnings/errors), native non-container Linux x64 publish, publish-script syntax and verifier (11 negative fixtures plus valid fixture). Artifact [14978136104](https://github.com/rajeevp727/turnova-platform/actions/runs/45516145585/artifacts/14978136104), 17,033,094 bytes; ZIP SHA-256 `47f3d1e36b4413e159c6580673914155139662233ce35193a921cdbe3fa833b6`.
+- Mobile-auth/mobile/Android/emulator/iOS/simulator jobs were intentionally skipped under the API-first phase gate. The changed application scope is two backend test files; no `src/mobile/` paths, Docker/container build/deployment, secrets, infrastructure or provider changes.
+- No MVP acceptance row status changed: **strict acceptance remains 0/19 Verified** (16 In Progress, 3 Blocked: `DISPATCH-01`, `DRIVER-04`, `SUPPORT-01`). This is full-evidence accounting, not an implementation percentage. Live Cosmos and production readiness remain unestablished.
+
 ## Active repository gate
 
 - PR #200 remains open, non-draft and mergeable. Three reviews are owner-authored COMMENTED; independent approvals: **0**; unresolved review threads: **0**; no independent reviewer is requested. Never self-approve or merge without independent human approval and repository permission.
@@ -742,10 +752,12 @@ Live Cosmos partition/ETag/transaction/multi-instance/restart/RU and failover ev
 
 ## Next exact actions
 
-1. Verify exact-head API-only CI for the current status-snapshot documentation commit; do not infer a pass from the source/test or previous documentation checkpoints.
-2. Continue API-only persistence audits. The next adjacent bootstrap gap is cancellation and identity validation for the `DatabaseResponse.Database` handle; then continue auth/authorization, privacy and contract audits.
-3. Obtain independent human review/approval for PR #200. Merge only if repository policy permits and all final-head checks are green.
-4. Re-read main and perform a fresh API phase-exit audit after any permitted merge. Only then begin Android Rider, followed by Android Driver, iOS Rider and iOS Driver.
+1. Audit `CosmosMigrationDatabase.ReadContainerAsync` provider-await cancellation precedence: determine whether caller cancellation wins when a read fails concurrently, then add deterministic tests and use the shared cancellation-precedence helper if required.
+2. Continue API-only auth/authorization/privacy/OpenAPI and Cosmos persistence-contract audits; do not begin Android until the API phase exit is independently reviewed and verified.
+3. Obtain independent human maintainer review/approval for PR #200. The existing reviews are owner-authored COMMENTED only; never self-approve, bypass protection or merge without repository permission.
+4. After a permitted merge, re-read main and conduct a fresh API phase-exit audit before Android Rider, then Android Driver, iOS Rider and iOS Driver.
+
+No Docker/container builds or deployments. Never claim production/device/live Cosmos validation unless performed.
 
 ## Historical run log
 
