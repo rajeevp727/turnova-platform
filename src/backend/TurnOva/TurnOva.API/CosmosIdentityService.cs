@@ -94,7 +94,9 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
             batch.CreateItem(reservation);
             batch.CreateItem(user);
             ct.ThrowIfCancellationRequested();
-            using var response = await batch.ExecuteAsync(ct);
+            using var response = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => batch.ExecuteAsync(ct),
+                ct);
             if (!response.IsSuccessStatusCode)
             {
                 ct.ThrowIfCancellationRequested();
@@ -202,11 +204,13 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
         user.RefreshTokenExpiresAtUtc = DateTimeOffset.UtcNow.AddDays(RefreshTokenDays);
         try
         {
-            await container.ReplaceItemAsync(
-                user,
-                user.Id,
-                new PartitionKey(normalizedRole),
-                new ItemRequestOptions { IfMatchEtag = etag },
+            _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => container.ReplaceItemAsync(
+                    user,
+                    user.Id,
+                    new PartitionKey(normalizedRole),
+                    new ItemRequestOptions { IfMatchEtag = etag },
+                    ct),
                 ct);
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
@@ -299,11 +303,13 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
                     ct.ThrowIfCancellationRequested();
                     try
                     {
-                        await container.ReplaceItemAsync(
-                            user,
-                            user.Id,
-                            new PartitionKey(role),
-                            new ItemRequestOptions { IfMatchEtag = etag },
+                        _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                            () => container.ReplaceItemAsync(
+                                user,
+                                user.Id,
+                                new PartitionKey(role),
+                                new ItemRequestOptions { IfMatchEtag = etag },
+                                ct),
                             ct);
                     }
                     catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
@@ -381,11 +387,13 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
             ct.ThrowIfCancellationRequested();
             try
             {
-                await container.ReplaceItemAsync(
-                    user,
-                    id,
-                    partitionKey,
-                    new ItemRequestOptions { IfMatchEtag = etag },
+                _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                    () => container.ReplaceItemAsync(
+                        user,
+                        id,
+                        partitionKey,
+                        new ItemRequestOptions { IfMatchEtag = etag },
+                        ct),
                     ct);
                 return Results.NoContent();
             }
@@ -473,7 +481,7 @@ public sealed class CosmosIdentityService(CosmosClient? cosmosClient = null, ICo
             if (!string.Equals(returnedDatabaseName, databaseName, StringComparison.Ordinal))
                 throw new InvalidOperationException("Cosmos returned a database handle that does not match the configured database name.");
 
-            var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+            var response = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
                 () => database.CreateContainerIfNotExistsAsync(
                     new ContainerProperties(ContainerName, "/role"),
                     cancellationToken: ct),
