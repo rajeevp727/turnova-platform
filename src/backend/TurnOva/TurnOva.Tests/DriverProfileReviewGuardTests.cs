@@ -220,6 +220,43 @@ public sealed class DriverProfileReviewGuardTests
     }
 
     [Fact]
+    public void UnionPhotoVisibilityPreservesLegacyApprovalWithoutReviewSnapshot()
+    {
+        var legacyApproved = CreateProfile() with
+        {
+            ProfilePhotoApprovalStatus = "Approved",
+            ProfilePhotoApprovedByUnionId = "union-1"
+        };
+
+        Assert.True(DriverProfileReviewGuard.IsApprovedForUnionVisibility(legacyApproved, "union-1"));
+        Assert.False(DriverProfileReviewGuard.IsApprovedForUnionVisibility(legacyApproved, "union-2"));
+    }
+
+    [Fact]
+    public void UnionPhotoVisibilityFailsClosedForIncompleteOrMismatchedReviewMetadata()
+    {
+        var approved = CreateProfile() with
+        {
+            ProfilePhotoBase64 = "selfie",
+            ProfilePhotoApprovalStatus = "Approved",
+            ProfilePhotoApprovedByUnionId = "union-1",
+            ProfilePhotoReviewedAtUtc = DateTimeOffset.Parse("2026-11-25T08:00:00Z"),
+            ProfilePhotoUnionReviewActorId = "union-manager-1",
+            ProfilePhotoUnionReviewUnionId = "union-1",
+            ProfilePhotoUnionReviewUnionName = "Test Union"
+        };
+
+        Assert.True(DriverProfileReviewGuard.IsApprovedForUnionVisibility(approved, "union-1"));
+        Assert.False(DriverProfileReviewGuard.IsApprovedForUnionVisibility(
+            approved with { ProfilePhotoUnionReviewUnionId = "union-2" }, "union-1"));
+        Assert.False(DriverProfileReviewGuard.IsApprovedForUnionVisibility(
+            approved with { ProfilePhotoUnionReviewActorId = null }, "union-1"));
+        Assert.False(DriverProfileReviewGuard.IsApprovedForUnionVisibility(
+            approved with { ProfilePhotoOperationsReviewActorId = "ops-actor" }, "union-1"));
+        Assert.False(DriverProfileReviewGuard.IsApprovedForUnionVisibility(
+            approved with { ProfilePhotoApprovalStatus = "Rejected", ProfilePhotoApprovedByUnionId = null }, "union-1"));
+    }
+    [Fact]
     public void ContactLikeReviewReasonsMakePrivateRecoverySnapshotsIncomplete()
     {
         var reviewedAt = DateTimeOffset.Parse("2026-11-12T10:00:00Z");

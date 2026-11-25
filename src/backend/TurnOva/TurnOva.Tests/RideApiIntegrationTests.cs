@@ -4064,6 +4064,48 @@ public sealed partial class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task RiderDiscoveryAndOperationsHideSelfieWhenUnionReviewSnapshotConflictsWithCurrentUnion()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string driverId = "inconsistent-selfie-driver";
+        const string unionId = "inconsistent-selfie-union";
+        using var rider = factory.CreateClient("Rider", "inconsistent-selfie-rider");
+        using var ops = factory.CreateClient("Ops", "inconsistent-selfie-ops");
+        ops.DefaultRequestHeaders.Add("X-Driver-Admin-Key", "integration-test-admin-key-32chars");
+
+        SeedBookableDriver(factory, driverId, unionId);
+        var profiles = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverOnboardingProfile>>();
+        var now = DateTimeOffset.UtcNow;
+        profiles[driverId] = profiles[driverId] with
+        {
+            ProfilePhotoBase64 = "/9j/2Q==",
+            ProfilePhotoContentType = "image/jpeg",
+            ProfilePhotoCapturedAtUtc = now,
+            ProfilePhotoApprovalStatus = "Approved",
+            ProfilePhotoApprovedByUnionId = unionId,
+            ProfilePhotoReviewedAtUtc = now,
+            ProfilePhotoReviewReason = null,
+            ProfilePhotoUnionReviewActorId = "former-union-manager",
+            ProfilePhotoUnionReviewUnionId = "previous-union",
+            ProfilePhotoUnionReviewUnionName = "Previous Union"
+        };
+
+        using var operationsResponse = await ops.GetAsync($"/api/v1/ops/unions/{unionId}/drivers");
+        Assert.Equal(HttpStatusCode.OK, operationsResponse.StatusCode);
+        using var operationsJson = JsonDocument.Parse(await operationsResponse.Content.ReadAsStringAsync());
+        var operationsDriver = Assert.Single(operationsJson.RootElement.EnumerateArray()).GetProperty("driver");
+        Assert.Equal(JsonValueKind.Null, operationsDriver.GetProperty("profilePhotoBase64").ValueKind);
+
+        using var discoveryResponse = await rider.GetAsync(
+            "/api/v1/rider/discovery?latitude=17.493&longitude=78.399&passengers=1");
+        Assert.Equal(HttpStatusCode.OK, discoveryResponse.StatusCode);
+        using var discoveryJson = JsonDocument.Parse(await discoveryResponse.Content.ReadAsStringAsync());
+        var unionGroup = Assert.Single(discoveryJson.RootElement.GetProperty("unions").EnumerateArray());
+        var discoveredDriver = Assert.Single(unionGroup.GetProperty("drivers").EnumerateArray());
+        Assert.Equal(driverId, discoveredDriver.GetProperty("driverId").GetString());
+        Assert.Equal(JsonValueKind.Null, discoveredDriver.GetProperty("profilePhotoBase64").ValueKind);
+    }
+    [Fact]
     public async Task RiderDiscoveryGroupsApprovedUnionsCapsThreeAndOrdersByPickupProximityWithoutQueueDependency()
     {
         using var factory = new TurnOvaApiFactory();

@@ -2318,7 +2318,7 @@ opsUnions.MapGet("/{unionId}/drivers", async (HttpContext context, string unionI
                 profile.DriverId, profile.FullName, profile.PhoneNumber, profile.ZoneId,
                 profile.VehicleMake, profile.VehicleModel, profile.VehicleRegistration,
                 profile.ServiceClass, profile.PassengerCapacity, profile.Status,
-                ProfilePhotoBase64 = profile.ProfilePhotoApprovalStatus == "Approved" && profile.ProfilePhotoApprovedByUnionId == unionId
+                ProfilePhotoBase64 = DriverProfileReviewGuard.IsApprovedForUnionVisibility(profile, unionId)
                     ? await GetProfilePhotoBase64Async(profile, ct) : null,
                 profile.ProfilePhotoContentType, profile.ProfilePhotoCapturedAtUtc,
                 profile.ProfilePhotoApprovalStatus
@@ -3488,9 +3488,8 @@ app.MapGet("/api/v1/rider/discovery", async (
             .ThenBy(candidate => candidate.Profile.DriverId, StringComparer.Ordinal)
             .Take(3))
         {
-            var approvedForCurrentUnion =
-                candidate.Profile.ProfilePhotoApprovalStatus == "Approved" &&
-                candidate.Profile.ProfilePhotoApprovedByUnionId == union.UnionId;
+            var approvedForCurrentUnion = DriverProfileReviewGuard.IsApprovedForUnionVisibility(
+                candidate.Profile, union.UnionId);
             var photo = approvedForCurrentUnion
                 ? await GetProfilePhotoBase64Async(candidate.Profile, ct)
                 : null;
