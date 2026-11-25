@@ -214,6 +214,52 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task RideHubNegotiationRequiresAnAuthenticatedJwt()
+    {
+        using var factory = new AuthApiFactory();
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsync("/hubs/rides/negotiate?negotiateVersion=1", null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        AssertNoStoreHeaders(response);
+    }
+
+    [Fact]
+    public async Task RideHubNegotiationAcceptsQueryBearerOnlyOnRideHub()
+    {
+        using var factory = new AuthApiFactory();
+        using var client = factory.CreateClient();
+        var accessToken = Uri.EscapeDataString(CreateToken());
+
+        using var hubResponse = await client.PostAsync(
+            $"/hubs/rides/negotiate?negotiateVersion=1&access_token={accessToken}",
+            null);
+
+        Assert.Equal(HttpStatusCode.OK, hubResponse.StatusCode);
+
+        using var apiResponse = await client.GetAsync($"/api/v1/auth/me?access_token={accessToken}");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, apiResponse.StatusCode);
+        AssertNoStoreHeaders(apiResponse);
+    }
+
+    [Fact]
+    public async Task SubjectlessSignedTokenCannotNegotiateRideHub()
+    {
+        using var factory = new AuthApiFactory();
+        using var client = factory.CreateClient();
+        var accessToken = Uri.EscapeDataString(CreateToken(includeSubject: false));
+
+        using var response = await client.PostAsync(
+            $"/hubs/rides/negotiate?negotiateVersion=1&access_token={accessToken}",
+            null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        AssertNoStoreHeaders(response);
+    }
+
+    [Fact]
     public async Task MeReturnsIdentityFromValidatedTurnOvaJwt()
     {
         using var factory = new AuthApiFactory();
