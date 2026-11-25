@@ -25,3 +25,12 @@ The exact source/test head `d2ef0131ba4fa682f7d9feff9b72de4030c0d965` passed API
 ## Runtime call-site audit
 
 The remaining direct Cosmos writes in API `Program.cs` now route through `CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync`, except conditional Driver ride acceptance, which uses the tested `RideAcceptWriteGuard` to preserve definite-conflict reservation cleanup. The guard's generic success/failure semantics are covered by `CosmosReadResponseGuardTests`. No Cosmos ETag, multi-instance, restart or live-provider proof is inferred from these SDK-mock tests.
+
+
+## Run 160 — 2026-11-25 — post-commit cancellation and auth cache-safety paths
+
+- `UnionAssignmentWriterTests.CosmosReplacementReturnsCommittedAssignmentWhenCancellationArrivesAfterWrite` verifies an ETag-guarded assignment replacement remains successful when cancellation arrives after the provider confirms the committed write.
+- `CosmosQueueCancellationTests.QueueMutationsRemainSuccessfulWhenCancellationArrivesAfterAtomicCommit` has three deterministic cases for Remove, MoveToBack and MoveToBackOnce. Each verifies the observed ETag, transactional audit event and successful result after cancellation races the completed batch.
+- `AuthApiIntegrationTests.SubjectlessSignedTokenCannotReadIdentity` and `AmbiguousSubjectClaimsAreRejectedByJwtValidation` now assert no-store/no-cache response headers on 403 and 401 respectively.
+- Exact source/test head [`e83be0aab4c10ea6102af7d56b1a3a3e4f0e0f25`](https://github.com/rajeevp727/turnova-platform/commit/e83be0aab4c10ea6102af7d56b1a3a3e4f0e0f25) passed API-only CI [#45547947572](https://github.com/rajeevp727/turnova-platform/actions/runs/45547947572): 1,615/1,615 backend tests, 0 failed/0 skipped; .NET 10 Release build, 0 warnings/0 errors; native non-container Linux x64 publish; publish-script syntax; verifier (11 negative fixtures plus valid fixture). Artifact [14992172562](https://github.com/rajeevp727/turnova-platform/actions/runs/45547947572/artifacts/14992172562), 17,039,900 bytes; SHA-256 `411debb0c9083ff84d9ecae097cd7083703c420b1cbaaa7420b9fd8b27fdbba8`.
+- Test-only increment; no runtime source or mobile paths changed. No acceptance row is promoted; strict acceptance remains 0/19 Verified (16 In Progress, 3 Blocked). Live Cosmos and production readiness remain unproven.
