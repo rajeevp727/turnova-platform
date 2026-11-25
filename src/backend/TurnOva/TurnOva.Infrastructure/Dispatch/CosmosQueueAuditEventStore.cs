@@ -15,10 +15,12 @@ internal sealed class CosmosQueueAuditEventStore(Container container) : IQueueAu
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            await container.CreateItemAsync(
-                auditEvent,
-                new PartitionKey(partitionKey),
-                cancellationToken: cancellationToken);
+            _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => container.CreateItemAsync(
+                    auditEvent,
+                    new PartitionKey(partitionKey),
+                    cancellationToken: cancellationToken),
+                cancellationToken);
             // A successful create is durable. Do not turn a committed audit write into a
             // cancellation result if cancellation arrives after Cosmos confirms the commit.
             return true;
