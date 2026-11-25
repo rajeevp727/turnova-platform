@@ -1,4 +1,13 @@
 # API Test Plan Addendum — 2026-11-25 (Run 159)
+
+## Queue audit persisted-event contract validation — Run 189
+
+- **COSMOS-STORE-034** — `CosmosQueueResourceContractTests.QueueAuditReadAcceptsEverySupportedEventShape` verifies the five persisted audit event types and their valid metadata shapes. The companion seven-case theory rejects an unknown event type, offer metadata on a plain mutation, a rotation without an offer ID, dispatch-exception records missing required trace/reason fields, and incompatible mixed metadata.
+- **COSMOS-STORE-035** — `CosmosQueueResourceContractTests.QueueAuditReadRejectsMissingOrNonUtcTimestamp` rejects default and non-UTC persisted audit timestamps.
+- Runtime guard: `CosmosQueueStore.RequireAuditQueryItem` now fails closed for unsupported event types, mismatched per-type metadata and invalid timestamps; no queue ranking/assignment or persistence schema changes.
+- Exact source/test head `1915b2d9b3c6fc6121b35dcc591b1ebd6f47630b` passed API-only CI [#45675351598](https://github.com/rajeevp727/turnova-platform/actions/runs/45675351598): **1,704/1,704 tests (0 failed, 0 skipped)**, .NET 10 Release build (0 warnings/errors), native non-container Linux x64 publish, publish-script syntax and verifier (11 negative fixtures plus valid fixture). Artifact [15052401027](https://github.com/rajeevp727/turnova-platform/actions/runs/45675351598/artifacts/15052401027), 17,040,915 bytes; ZIP SHA-256 `0243cc5d3c888005dfe33932fa76fce954cb19a2e0bb33288c925ef24f8b0e83`.
+- Mobile-auth/mobile/Android/emulator/iOS/simulator jobs were intentionally skipped by the API-first phase gate. Deterministic SDK mocks do not establish live Cosmos ETag/multi-instance/restart/failover behavior.
+
 - **Final documentation/matrix head:** [`dfa0d9b2`](https://github.com/rajeevp727/turnova-platform/commit/dfa0d9b291a1ef3231c7c767ce2820d061c893ba) passed exact-head API-only CI [#45622711487](https://github.com/rajeevp727/turnova-platform/actions/runs/45622711487): scope/backend success; **1,666/1,666 tests (0 failed, 0 skipped)**; .NET 10 Release build (0 warnings/errors); native non-container Linux x64 publish (44,086,076 bytes); publish-script syntax; native verifier (11 negative fixtures plus valid fixture); artifact [15028000422](https://github.com/rajeevp727/turnova-platform/actions/runs/45622711487/artifacts/15028000422), 17,040,803 bytes, ZIP SHA-256 `25a43c89a7afbac408da17075cee78af98203ca055797f476faa54838e581490`. Mobile-auth/mobile/Android/emulator/iOS/simulator jobs were intentionally skipped under the API-first gate.
 
 This append-only supplement records API persistence regression tests added during Runs 158–159. It does not create or promote MVP acceptance rows. The canonical `docs/test-plan.md` remains unchanged.
