@@ -309,3 +309,16 @@ Exact source/test API-only CI [#45629147447](https://github.com/rajeevp727/turno
 This is a test-only regression. It extends malformed-JSON coverage (AUTH-API-079) to unsupported media types for all five public auth endpoints; no runtime API behavior or mobile source changed.
 
 Exact source/test API-only CI [#45639725625](https://github.com/rajeevp727/turnova-platform/actions/runs/45639725625) passed on `fb69378f73b54f0b4d3f80281a765dcb1d72d5b8`: **1,676/1,676 backend tests (0 failed, 0 skipped)**; .NET 10 Release build (0 warnings, 0 errors); native non-container Linux x64 publish (44,086,076 bytes); publish-script syntax; native verifier (11 negative fixtures plus valid fixture). Artifact [15034314000](https://github.com/rajeevp727/turnova-platform/actions/runs/45639725625/artifacts/15034314000), 17,040,783 bytes; ZIP SHA-256 `06e2ffc67c575d7543066d8528c1ad8ce86bb96b11f21776b2518b417bd9394d`. Mobile-auth/mobile/Android/emulator/iOS/simulator jobs were intentionally skipped under the API-first phase gate.
+
+
+## Run 182 — unsupported HTTP methods on every public authentication route
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| AUTH-API-081 | GET is sent to the POST-only Rider registration, Driver registration, Rider login, Driver login and refresh routes | `AuthApiIntegrationTests.UnsupportedMethodOnPublicAuthEndpointsReturnsMethodNotAllowedWithoutCaching` (five deterministic cases) | Every route returns HTTP 405 and retains `Cache-Control: no-store` plus `Pragma: no-cache`; no authentication handler or persistence mutation is invoked |
+
+The test closes the method-mismatch case in the API response cache boundary. It complements AUTH-API-078/079 malformed-body (400), AUTH-API-080 unsupported-media-type (415), unmatched-route (404), CORS preflight (204) and unhandled-exception (500) coverage. It is test-only; no runtime API or mobile behavior changed.
+
+Source/test commit [`91059af21f49335c4c03c0093aec01fc44239f45`](https://github.com/rajeevp727/turnova-platform/commit/91059af21f49335c4c03c0093aec01fc44239f45) passed exact-head API-only CI [#45650448111](https://github.com/rajeevp727/turnova-platform/actions/runs/45650448111): **1,681/1,681 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (0 warnings/errors), native non-container Linux x64 publish (44,086,068 bytes), publish-script syntax and native verifier (11 negative fixtures plus valid fixture). Artifact [15039134806](https://github.com/rajeevp727/turnova-platform/actions/runs/45650448111/artifacts/15039134806), 17,040,760 bytes; ZIP SHA-256 `288e43bf7e21a6b6b925d601ce924bd4789656ad1c9d87050a71796ce3038786`. Mobile-auth/mobile/Android/emulator/iOS/simulator jobs were intentionally skipped under the API-first phase gate. The subsequent documentation-bearing head requires its own exact-head API-only CI.
+
+Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). No row is promoted. PR #200 remains the sole ready/active API PR and requires independent human maintainer approval; the three owner-authored COMMENTED reviews are not approvals. PR #196/#198/#205/#206 remain Draft/parked. Android/iOS remain gated. No live Cosmos, production identity/provider, hosting or device readiness is claimed.
