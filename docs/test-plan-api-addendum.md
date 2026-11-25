@@ -1,4 +1,14 @@
-# API Test Plan Addendum — 2026-11-26 (Run 191)
+# API Test Plan Addendum — 2026-11-26 (Run 192)
+
+## QueueService join input validation — Run 192
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| QUEUE-SVC-001 | `QueueService.JoinAsync` receives a `DriverQueueEntry` with a default `JoinedAt` timestamp | `QueueStoreTests.QueueServiceJoinRejectsDefaultTimestampBeforeStoreMutation` | Throws `ArgumentException` before `IQueueStore.AddAsync`; the in-memory queue and audit remain unchanged |
+
+`QueueService.JoinAsync` now rejects a default join timestamp before delegating to any queue store. This complements `COSMOS-STORE-038`, which protects the Cosmos adapter's transactional-batch boundary. The validation does not change internal FIFO ordering or expose FIFO to Rider discovery. Exact-head API-only CI [#45683111993](https://github.com/rajeevp727/turnova-platform/actions/runs/45683111993) passed **1,713/1,713 backend tests**, Release build (0 warnings/errors), native non-container Linux x64 publish, script syntax and verifier (11 negative fixtures plus valid fixture), artifact [15055142197](https://github.com/rajeevp727/turnova-platform/actions/runs/45683111993/artifacts/15055142197).
+
+## Previous API test plan additions — Run 191
 
 ## Cosmos queue ordering round-trip and write validation — Run 191
 
