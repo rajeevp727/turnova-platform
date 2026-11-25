@@ -1,3 +1,13 @@
+## Run 156 — 2026-11-25 — committed-write cancellation precedence across migration persistence
+
+- **Phase:** API `in_progress`; Android/iOS `not_started`. PR [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; base/main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`; source/test head `139d0cdc6d09d3516f18d1e342c26557bfc1cbd1`.
+- **Finding/fix:** remaining committed writes in migration lease create/replace/release, migration-history marker creation and support-container TTL replacement could surface provider failures when caller cancellation raced. Applied `AwaitCommittedWriteWithCancellationPrecedenceAsync` to all five paths. Existing ETag If-Match and Cosmos conflict/race handling remain intact; successful commits are not retroactively cancelled.
+- **Tests:** seven deterministic tests cover lease create/replace/release cancellation races, migration-history marker create failures with and without cancellation (including lease release), and TTL replace failures with and without cancellation.
+- **Exact-head API-only CI:** [#45531147084](https://github.com/rajeevp727/turnova-platform/actions/runs/45531147084) passed **1,572/1,572 backend tests (0 failed, 0 skipped)**; .NET 10 Release build (0 warnings/errors); native non-container Linux x64 publish; publish-script syntax; verifier (11 negative fixtures plus valid fixture). Published API size 44,070,504 bytes. Artifact [14985606229](https://github.com/rajeevp727/turnova-platform/actions/runs/45531147084/artifacts/14985606229), 17,034,438 bytes; ZIP SHA-256 `e26ec2a208abcfbf4dfeee96899be8ee54c66685844e9f4fe4b19f635c75942d`.
+- **Acceptance:** strict **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). No row promoted; deterministic mocks do not establish live Cosmos behavior.
+- **Review/phase:** PR #200 remains sole ready/active API PR; 3 owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads. PRs #196/#198/#205/#206 remain Draft. Main phase metadata is stale; PR branch metadata correctly remains API `in_progress`, Android/iOS `not_started`.
+- **Next:** continue API-only persistence audit across ride/union/identity/support repositories for cancellation precedence, ETag fencing, idempotency and concurrency; continue auth/authorization/privacy/OpenAPI. Obtain independent maintainer approval; do not self-approve or merge without permission.
+
 ## Run 155 — 2026-11-25 — Cosmos bootstrap write cancellation precedence
 
 - **Platform phase:** API `in_progress`; Android/iOS `not_started`. PR [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; base/main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`; current source/test head `498709cb8206ee642240c1f1d3eb3b48d52148a7`.
@@ -795,10 +805,10 @@ Live Cosmos partition/ETag/transaction/multi-instance/restart/RU and failover ev
 
 ## Next exact actions
 
-1. Audit remaining committed-write cancellation precedence in `CosmosMigrationLeaseStore.TryCreateAsync`, `TryReplaceAsync`, `TryReleaseAsync`, migration-history `CreateItemAsync`, and TTL `ReplaceContainerAsync`. Preserve successful committed-write semantics and ETag fencing; add deterministic provider-failure/cancellation race tests.
-2. Continue API-only auth/authorization/privacy/OpenAPI and persistence-contract audits. Do not begin Android until the API engineering exit criteria and available API-specific checks are complete and independently reviewed.
-3. Obtain independent human maintainer review/approval for PR #200. The three existing reviews are owner-authored COMMENTED only; never self-approve, bypass protection or merge without repository permission.
-4. After a permitted merge, re-read main and conduct a fresh API phase-exit audit before Android Rider, then Android Driver, iOS Rider and iOS Driver in strict order.
+1. Continue API-only persistence audit across ride, union, identity and support repositories for provider-failure/cancellation precedence, ETag fencing, idempotency, concurrency and safe retry semantics.
+2. Continue auth/authorization/privacy/OpenAPI and API contract/documentation audits. Do not begin Android until API engineering exit criteria and available API-specific checks are complete and independently reviewed.
+3. Obtain independent human maintainer approval for PR #200; never self-approve, bypass protection or merge without repository permission.
+4. After any permitted merge, re-read main and perform a fresh API phase-exit audit before Android Rider, then Android Driver, iOS Rider and iOS Driver.
 
 No Docker/container builds or deployments. Never claim production/device/live Cosmos validation unless performed.
 
