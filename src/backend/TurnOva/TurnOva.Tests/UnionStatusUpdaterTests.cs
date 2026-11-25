@@ -479,6 +479,11 @@ public sealed class UnionStatusUpdaterTests
 
         Assert.Equal(UnionStatusUpdateOutcome.Updated, result.Outcome);
         Assert.Equal(original with { Status = "Suspended", UpdatedAtUtc = updatedAt }, result.Union);
+        container.Verify(value => value.ReadItemAsync<DriverUnion>(
+            UnionId,
+            It.IsAny<PartitionKey>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
         container.Verify(value => value.ReplaceItemAsync<DriverUnion>(
             It.IsAny<DriverUnion>(),
             UnionId,
