@@ -57,6 +57,30 @@ public sealed class DispatchExceptionAuditInputBoundaryTests
     }
 
     [Fact]
+    public async Task InMemoryStoreAcceptsMatchingRetryAndRejectsTraceReuseWithDifferentMetadata()
+    {
+        var store = new InMemoryQueueStore();
+
+        await store.RecordDispatchExceptionAsync(
+            "driver-actor-1", "zone-a", "cab", "trace-idempotent",
+            QueueAuditReasonCategories.QueueReadFailed, CancellationToken.None);
+        await store.RecordDispatchExceptionAsync(
+            "driver-actor-1", "zone-a", "cab", "trace-idempotent",
+            QueueAuditReasonCategories.QueueReadFailed, CancellationToken.None);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.RecordDispatchExceptionAsync(
+            "driver-actor-2", "zone-a", "cab", "trace-idempotent",
+            QueueAuditReasonCategories.QueueReadFailed, CancellationToken.None));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.RecordDispatchExceptionAsync(
+            "driver-actor-1", "zone-a", "cab", "trace-idempotent",
+            QueueAuditReasonCategories.DriverReservationFailed, CancellationToken.None));
+
+        var audit = Assert.Single(await store.GetAuditEventsAsync("zone-a", "cab", CancellationToken.None));
+        Assert.Equal("driver-actor-1", audit.DriverId);
+        Assert.Equal(QueueAuditReasonCategories.QueueReadFailed, audit.ReasonCategory);
+    }
+
+    [Fact]
     public async Task AuditWriterCancellationTakesPrecedenceOverInvalidMetadata()
     {
         using var cancellation = new CancellationTokenSource();
