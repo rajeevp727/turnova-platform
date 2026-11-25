@@ -17,8 +17,10 @@ public sealed class CosmosMigrationRunner(
     public async Task RunAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var databaseResponse = await client.CreateDatabaseIfNotExistsAsync(
-            options.DatabaseName, throughput: 400, cancellationToken: cancellationToken);
+        var databaseResponse = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+            () => client.CreateDatabaseIfNotExistsAsync(
+                options.DatabaseName, throughput: 400, cancellationToken: cancellationToken),
+            cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         var database = CosmosReadResponseGuard.ReadResponseResource(
             databaseResponse,
