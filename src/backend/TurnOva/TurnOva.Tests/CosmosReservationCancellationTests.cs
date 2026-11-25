@@ -671,7 +671,7 @@ public sealed class CosmosReservationCancellationTests
                     It.Is<RiderActiveBookingReservation>(item =>
                         item.RiderId == "rider-1" &&
                         item.RideId == "ride-1" &&
-                        item.ExpiresAtUtc is null),
+                        item.ExpiresAtUtc == null),
                     It.Is<TransactionalBatchItemRequestOptions>(options =>
                         options.IfMatchEtag == "rider-reservation-etag")))
                 .Returns(batch.Object);
@@ -727,7 +727,7 @@ public sealed class CosmosReservationCancellationTests
                 It.Is<RiderActiveBookingReservation>(item =>
                     item.RiderId == "rider-1" &&
                     item.RideId == "ride-1" &&
-                    item.ExpiresAtUtc is null),
+                    item.ExpiresAtUtc == null),
                 It.Is<TransactionalBatchItemRequestOptions>(options =>
                     options.IfMatchEtag == "rider-reservation-etag")), Times.Once);
             batch.Verify(value => value.DeleteItem(
