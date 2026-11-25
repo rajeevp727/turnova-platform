@@ -1,3 +1,11 @@
+## Queue join validation across domain and persistence boundaries — Run 193
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| QUEUE-STORE-016 | Queue joins with blank DriverId, ZoneId or ServiceClass, or default JoinedAt are submitted directly to the domain queue, in-memory adapter or Cosmos adapter | `DriverQueueEntryValidationTests.InMemoryStoreRejectsMalformedJoinBeforeQueueOrAuditMutation`; `DriverQueueEntryValidationTests.CosmosStoreRejectsMalformedJoinBeforeCreatingTransactionalBatch`; `DriverQueueEntryValidationTests.DomainQueueRejectsMalformedJoinWithoutAddingAnEntry`; `DriverQueueEntryValidationTests.InMemoryStoreStillAcceptsNonCabLegacyQueueEntries` | Invalid inputs throw before queue/audit mutation or Cosmos transactional-batch creation; valid legacy non-Cab queue records remain accepted |
+
+`DriverQueueEntry.ValidateForJoin` centralizes required-field validation and is applied at the application-service, domain-queue, in-memory-store and Cosmos-store boundaries. It does not introduce Cab-only filtering into historical internal queue compatibility and does not alter FIFO ordering, Rider ranking or assignment. Exact source/test API-only CI [#45701326478](https://github.com/rajeevp727/turnova-platform/actions/runs/45701326478) passed **1,726/1,726 backend tests (0 failed, 0 skipped)**, Release build (0 warnings/errors), native non-container Linux x64 publish, publish-script syntax and verifier (11 negative fixtures plus valid fixture); artifact [15064016448](https://github.com/rajeevp727/turnova-platform/actions/runs/45701326478/artifacts/15064016448), ZIP SHA-256 `99d3cc2dc0aa62b75ff7f7a1cd9aaf44753aafd3e6c672550463ee4a1372092f`.
+
 # API Test Plan Addendum — 2026-11-26 (Run 192)
 
 ## QueueService join input validation — Run 192
