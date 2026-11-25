@@ -4477,8 +4477,16 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (HttpContext context, ClaimsP
             AuditEvents = AppendRideAuditEvent(requestedRide, "RideStatusChanged", driverId, "Driver",
                 requestedRide.Status, "Accepted", occurredAtUtc: acceptedAtUtc)
         };
-        await rideContainer!.ReplaceItemAsync(accepted, rideId, new PartitionKey(rideId),
-            new ItemRequestOptions { IfMatchEtag = etag }, ct);
+        await RideAcceptWriteGuard.ExecuteAsync(
+            () => rideContainer!.ReplaceItemAsync(
+                accepted, rideId, new PartitionKey(rideId),
+                new ItemRequestOptions { IfMatchEtag = etag }, ct),
+            async releaseToken =>
+            {
+                _ = await driverRideReservations.TryReleaseAsync(driverId, rideId, releaseToken,
+                    new DriverRideReservationAuditContext(driverId, "Driver", DriverRideReservationAuditReasons.RideAcceptConflict));
+            },
+            ct);
         if (pendingOffer is not null && !string.IsNullOrWhiteSpace(pendingOffer.ETag))
         {
             var resolvedAttempts = pendingOffer.Attempts.Select(attempt =>
@@ -4494,17 +4502,6 @@ app.MapPost("/api/v1/rides/{rideId}/accept", async (HttpContext context, ClaimsP
     }
     catch (CosmosException ex) when (ex.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
     {
-        // A definite conditional-write loss must release this Driver's temporary reservation
-        // even when the HTTP request is cancelling; then preserve cancellation for the caller.
-        try
-        {
-            await driverRideReservations.TryReleaseAsync(driverId, rideId, CancellationToken.None,
-                new DriverRideReservationAuditContext(driverId, "Driver", DriverRideReservationAuditReasons.RideAcceptConflict));
-        }
-        finally
-        {
-            ct.ThrowIfCancellationRequested();
-        }
         return Results.Conflict(new { message = "This ride is no longer available." });
     }
     catch
