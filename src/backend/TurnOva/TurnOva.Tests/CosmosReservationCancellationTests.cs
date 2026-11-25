@@ -502,6 +502,244 @@ public sealed class CosmosReservationCancellationTests
         container.VerifyNoOtherCalls();
     }
 
+    [Theory]
+    [InlineData("make-permanent")]
+    [InlineData("set-expiry")]
+    [InlineData("release")]
+    public async Task DriverReservationMutationRemainsSuccessfulWhenCancellationArrivesAfterAtomicCommit(string operation)
+    {
+        var originalExpiry = DateTimeOffset.UtcNow.AddMinutes(10);
+        var replacementExpiry = DateTimeOffset.UtcNow.AddMinutes(20);
+        var expectedExpiry = operation == "make-permanent" ? (DateTimeOffset?)null : replacementExpiry;
+        var expectedEventType = operation switch
+        {
+            "make-permanent" => DriverRideReservationAuditEventTypes.MadePermanent,
+            "set-expiry" => DriverRideReservationAuditEventTypes.ExpiryChanged,
+            "release" => DriverRideReservationAuditEventTypes.Released,
+            _ => throw new ArgumentOutOfRangeException(nameof(operation))
+        };
+        var reservation = new DriverRideReservation("driver-1", "ride-1", DateTimeOffset.UtcNow, originalExpiry);
+        var readResponse = new Mock<ItemResponse<DriverRideReservation>>(MockBehavior.Strict);
+        readResponse.SetupGet(value => value.Resource).Returns(reservation);
+        readResponse.SetupGet(value => value.ETag).Returns("driver-reservation-etag");
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var batch = new Mock<TransactionalBatch>(MockBehavior.Strict);
+        var batchResponse = new Mock<TransactionalBatchResponse>();
+        batchResponse.SetupGet(value => value.IsSuccessStatusCode).Returns(true);
+        using var cancellation = new CancellationTokenSource();
+
+        container.Setup(value => value.ReadItemAsync<DriverRideReservation>(
+                "driver-1",
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                cancellation.Token))
+            .ReturnsAsync(readResponse.Object);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<DriverRideReservationAuditEvent>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+
+        if (operation == "release")
+        {
+            batch.Setup(value => value.DeleteItem(
+                    "driver-1",
+                    It.Is<TransactionalBatchItemRequestOptions>(options =>
+                        options.IfMatchEtag == "driver-reservation-etag")))
+                .Returns(batch.Object);
+        }
+        else
+        {
+            batch.Setup(value => value.ReplaceItem(
+                    "driver-1",
+                    It.Is<DriverRideReservation>(item =>
+                        item.DriverId == "driver-1" &&
+                        item.RideId == "ride-1" &&
+                        item.ExpiresAtUtc == expectedExpiry),
+                    It.Is<TransactionalBatchItemRequestOptions>(options =>
+                        options.IfMatchEtag == "driver-reservation-etag")))
+                .Returns(batch.Object);
+        }
+
+        batch.Setup(value => value.ExecuteAsync(cancellation.Token))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(batchResponse.Object);
+            });
+        container.Setup(value => value.CreateTransactionalBatch(
+                It.Is<PartitionKey>(key => key.Equals(new PartitionKey("driver-1")))))
+            .Returns(batch.Object);
+
+        var store = new CosmosDriverRideReservationStore(container.Object);
+        var result = operation switch
+        {
+            "make-permanent" => await store.TryMakePermanentAsync("driver-1", "ride-1", cancellation.Token),
+            "set-expiry" => await store.TrySetExpiryAsync(
+                "driver-1", "ride-1", replacementExpiry, cancellation.Token),
+            "release" => await store.TryReleaseAsync("driver-1", "ride-1", cancellation.Token),
+            _ => throw new ArgumentOutOfRangeException(nameof(operation))
+        };
+
+        Assert.True(result);
+        readResponse.VerifyGet(value => value.Resource, Times.Once);
+        readResponse.VerifyGet(value => value.ETag, Times.Once);
+        readResponse.VerifyNoOtherCalls();
+        container.Verify(value => value.ReadItemAsync<DriverRideReservation>(
+            "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), cancellation.Token), Times.Once);
+        container.Verify(value => value.CreateTransactionalBatch(
+            It.Is<PartitionKey>(key => key.Equals(new PartitionKey("driver-1")))), Times.Once);
+        batch.Verify(value => value.CreateItem(
+            It.Is<DriverRideReservationAuditEvent>(audit => audit.EventType == expectedEventType),
+            It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Once);
+        if (operation == "release")
+        {
+            batch.Verify(value => value.DeleteItem(
+                "driver-1",
+                It.Is<TransactionalBatchItemRequestOptions>(options =>
+                    options.IfMatchEtag == "driver-reservation-etag")), Times.Once);
+            batch.Verify(value => value.ReplaceItem(
+                It.IsAny<string>(),
+                It.IsAny<DriverRideReservation>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Never);
+        }
+        else
+        {
+            batch.Verify(value => value.ReplaceItem(
+                "driver-1",
+                It.Is<DriverRideReservation>(item =>
+                    item.DriverId == "driver-1" &&
+                    item.RideId == "ride-1" &&
+                    item.ExpiresAtUtc == expectedExpiry),
+                It.Is<TransactionalBatchItemRequestOptions>(options =>
+                    options.IfMatchEtag == "driver-reservation-etag")), Times.Once);
+            batch.Verify(value => value.DeleteItem(
+                It.IsAny<string>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Never);
+        }
+        batch.Verify(value => value.ExecuteAsync(cancellation.Token), Times.Once);
+        batchResponse.VerifyGet(value => value.IsSuccessStatusCode, Times.Once);
+        batch.VerifyNoOtherCalls();
+        container.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData("make-permanent")]
+    [InlineData("release")]
+    public async Task RiderReservationMutationRemainsSuccessfulWhenCancellationArrivesAfterAtomicCommit(string operation)
+    {
+        var expiry = DateTimeOffset.UtcNow.AddMinutes(10);
+        var expectedEventType = operation switch
+        {
+            "make-permanent" => RiderActiveBookingReservationAuditEventTypes.MadePermanent,
+            "release" => RiderActiveBookingReservationAuditEventTypes.Released,
+            _ => throw new ArgumentOutOfRangeException(nameof(operation))
+        };
+        var reservation = new RiderActiveBookingReservation(
+            "rider-1", "ride-1", "request-hash", DateTimeOffset.UtcNow, expiry);
+        var readResponse = new Mock<ItemResponse<RiderActiveBookingReservation>>(MockBehavior.Strict);
+        readResponse.SetupGet(value => value.Resource).Returns(reservation);
+        readResponse.SetupGet(value => value.ETag).Returns("rider-reservation-etag");
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var batch = new Mock<TransactionalBatch>(MockBehavior.Strict);
+        var batchResponse = new Mock<TransactionalBatchResponse>();
+        batchResponse.SetupGet(value => value.IsSuccessStatusCode).Returns(true);
+        using var cancellation = new CancellationTokenSource();
+
+        container.Setup(value => value.ReadItemAsync<RiderActiveBookingReservation>(
+                RiderActiveBookingReservation.DocumentId,
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                cancellation.Token))
+            .ReturnsAsync(readResponse.Object);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<RiderActiveBookingReservationAuditEvent>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+
+        if (operation == "release")
+        {
+            batch.Setup(value => value.DeleteItem(
+                    RiderActiveBookingReservation.DocumentId,
+                    It.Is<TransactionalBatchItemRequestOptions>(options =>
+                        options.IfMatchEtag == "rider-reservation-etag")))
+                .Returns(batch.Object);
+        }
+        else
+        {
+            batch.Setup(value => value.ReplaceItem(
+                    RiderActiveBookingReservation.DocumentId,
+                    It.Is<RiderActiveBookingReservation>(item =>
+                        item.RiderId == "rider-1" &&
+                        item.RideId == "ride-1" &&
+                        item.ExpiresAtUtc is null),
+                    It.Is<TransactionalBatchItemRequestOptions>(options =>
+                        options.IfMatchEtag == "rider-reservation-etag")))
+                .Returns(batch.Object);
+        }
+
+        batch.Setup(value => value.ExecuteAsync(cancellation.Token))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(batchResponse.Object);
+            });
+        container.Setup(value => value.CreateTransactionalBatch(
+                It.Is<PartitionKey>(key => key.Equals(new PartitionKey("rider-1")))))
+            .Returns(batch.Object);
+
+        var store = new CosmosRiderActiveBookingReservationStore(container.Object);
+        var result = operation switch
+        {
+            "make-permanent" => await store.TryMakePermanentAsync("rider-1", "ride-1", cancellation.Token),
+            "release" => await store.TryReleaseAsync("rider-1", "ride-1", cancellation.Token),
+            _ => throw new ArgumentOutOfRangeException(nameof(operation))
+        };
+
+        Assert.True(result);
+        readResponse.VerifyGet(value => value.Resource, Times.Once);
+        readResponse.VerifyGet(value => value.ETag, Times.Once);
+        readResponse.VerifyNoOtherCalls();
+        container.Verify(value => value.ReadItemAsync<RiderActiveBookingReservation>(
+            RiderActiveBookingReservation.DocumentId,
+            It.IsAny<PartitionKey>(),
+            It.IsAny<ItemRequestOptions?>(),
+            cancellation.Token), Times.Once);
+        container.Verify(value => value.CreateTransactionalBatch(
+            It.Is<PartitionKey>(key => key.Equals(new PartitionKey("rider-1")))), Times.Once);
+        batch.Verify(value => value.CreateItem(
+            It.Is<RiderActiveBookingReservationAuditEvent>(audit => audit.EventType == expectedEventType),
+            It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Once);
+        if (operation == "release")
+        {
+            batch.Verify(value => value.DeleteItem(
+                RiderActiveBookingReservation.DocumentId,
+                It.Is<TransactionalBatchItemRequestOptions>(options =>
+                    options.IfMatchEtag == "rider-reservation-etag")), Times.Once);
+            batch.Verify(value => value.ReplaceItem(
+                It.IsAny<string>(),
+                It.IsAny<RiderActiveBookingReservation>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Never);
+        }
+        else
+        {
+            batch.Verify(value => value.ReplaceItem(
+                RiderActiveBookingReservation.DocumentId,
+                It.Is<RiderActiveBookingReservation>(item =>
+                    item.RiderId == "rider-1" &&
+                    item.RideId == "ride-1" &&
+                    item.ExpiresAtUtc is null),
+                It.Is<TransactionalBatchItemRequestOptions>(options =>
+                    options.IfMatchEtag == "rider-reservation-etag")), Times.Once);
+            batch.Verify(value => value.DeleteItem(
+                It.IsAny<string>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()), Times.Never);
+        }
+        batch.Verify(value => value.ExecuteAsync(cancellation.Token), Times.Once);
+        batchResponse.VerifyGet(value => value.IsSuccessStatusCode, Times.Once);
+        batch.VerifyNoOtherCalls();
+        container.VerifyNoOtherCalls();
+    }
+
     private static Mock<Container> CreateDriverReservationQueryContainer(
         Mock<FeedIterator<DriverRideReservation>> iterator)
     {
