@@ -1,3 +1,19 @@
+## Run 177 — 2026-11-25 — public authentication failure cache-safety
+
+- **Platform phase:** API `in_progress`; Android/iOS `not_started`. API-first gate unchanged.
+- **Current item:** `AUTH-01` / `AUTH-02` — ensure every public authentication failure response remains non-cacheable.
+- **Active PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; base/main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`; prior head `b95decb30c85f42b58cc3cfcc4c4834047b1dbdc`.
+- **Finding:** login storage-unavailable, refresh validation/storage-unavailable and unsupported-role failures did not all explicitly assert the API's no-store/no-cache contract in integration tests.
+- **Implementation:** test-only `AUTH-API-076` adds a refresh-without-Cosmos 503 regression and asserts `Cache-Control: no-store` plus `Pragma: no-cache` for login 503, refresh 503/400 and unsupported-role 404. No runtime API code or mobile source changed.
+- **Prior exact-head evidence:** Run176 head `b95decb30c85f42b58cc3cfcc4c4834047b1dbdc` passed API-only CI [#45607406245](https://github.com/rajeevp727/turnova-platform/actions/runs/45607406245): 1,663/1,663 backend tests, .NET 10 Release build (0 warnings/errors), native non-container Linux x64 publish, publish-script syntax, verifier (11 negative fixtures plus valid fixture), artifact [15017453750](https://github.com/rajeevp727/turnova-platform/actions/runs/45607406245/artifacts/15017453750), ZIP SHA-256 `97404cf62bf06f80de3b48e4a96bf7352ab2de99d89623296f88acb672d32088`. This prior run does not validate the new test.
+- **Exact-head CI:** pending for this Run177 source/test + documentation commit; no pass is claimed yet.
+- **Acceptance:** strict **0/19 Verified** (16 In Progress, 3 Blocked: `DISPATCH-01`, `DRIVER-04`, `SUPPORT-01`). No row promoted; AI-01 remains supplemental.
+- **Review:** PR #200 remains open/non-draft/mergeable, three owner-authored `COMMENTED` reviews, 0 independent approvals and 0 unresolved threads. Independent human maintainer approval remains mandatory. No self-approval, bypass or merge.
+- **Parked PRs:** #196/#198/#205/#206 remain Draft/parked. #204 is trusted-LAN Android cleartext configuration only. Historical #197/#207 merges without independent approval remain disclosed process exceptions, not precedent.
+- **External gates:** live Cosmos ETag/partition/transaction/multi-instance/restart/failover/RU; production identity/key custody and UnionManager claim mapping; Cosmos credentials and non-container API hosting/TLS/trusted proxy/shared rate limiting; approved dispatch radius/zones/location freshness/negotiation lifetime/FIFO; maps/routing, SignalR/backplane, call/chat/push; private-media storage/scanning/consent/retention; support/escalation and reconciliation policy; Union legal approval; AI provider/model/credentials; later Android/iOS physical-device, signing, store and TestFlight evidence.
+
+No Docker/container builds or deployments. No live Cosmos, production-provider or device validation is claimed.
+
 ## Run 176 — Union coverage persistence guard (2026-11-25)
 
 - Required `DriverUnion.ZoneIds` and `ServiceClasses` collections are now checked at point-read and list-read boundaries. Malformed persisted Unions are unavailable to eligibility paths instead of causing null dereferences.

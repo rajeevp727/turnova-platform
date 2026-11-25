@@ -63,6 +63,7 @@ public sealed class AuthApiIntegrationTests
             new { email = "user@example.com", password = "SecurePass123" });
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        AssertNoStoreHeaders(response);
     }
 
     [Fact]
@@ -88,6 +89,7 @@ public sealed class AuthApiIntegrationTests
             new { email = "admin@example.com", password = "SecurePass123" });
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        AssertNoStoreHeaders(response);
     }
 
     [Fact]
@@ -99,6 +101,21 @@ public sealed class AuthApiIntegrationTests
         using var response = await client.PostAsJsonAsync("/api/v1/auth/refresh", new { refreshToken = " " });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertNoStoreHeaders(response);
+    }
+
+    [Fact]
+    public async Task RefreshRequiresConfiguredCosmosStorage()
+    {
+        using var factory = new AuthApiFactory();
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/v1/auth/refresh",
+            new { refreshToken = "synthetic-refresh-token" });
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        AssertNoStoreHeaders(response);
     }
 
     [Fact]

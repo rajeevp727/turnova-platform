@@ -247,3 +247,12 @@ The API now validates the required coverage collections at both point-read and l
 The first source/test head [CI #45605244707](https://github.com/rajeevp727/turnova-platform/actions/runs/45605244707) failed compilation because the initial test referenced an out-of-scope helper; the corrected exact-head run above is the passing evidence. The tests use deterministic in-memory fixtures and private-media test storage. They do not establish live Cosmos serialization/partition/ETag behavior or production identity. No acceptance row is promoted.
 
 The documentation checkpoint `c3a295bf4fdaf7e369d49799ff51259fb95445d2` passed exact-head API-only CI [#45606695500](https://github.com/rajeevp727/turnova-platform/actions/runs/45606695500), including the same 1,663/1,663 tests and native non-container publish/verifier. This follow-up matrix/handoff synchronization requires its own exact-head CI.
+
+
+## Run 177 — public authentication failure cache-safety
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| AUTH-API-076 | Public login storage failure, refresh storage failure, missing refresh token and unsupported role failures | `AuthApiIntegrationTests.LoginRequiresConfiguredCosmosStorage`, `RefreshRequiresConfiguredCosmosStorage`, `RefreshRejectsMissingToken`, `UnsupportedRoleIsNotAccepted` | HTTP 503/400/404 responses retain `Cache-Control: no-store` and `Pragma: no-cache`; no refresh credential or validation detail is returned |
+
+The regression closes an evidence gap in the public authentication cache policy: registration already asserted non-cacheable storage failures, while login/refresh/unsupported-role paths did not all assert it. The refresh storage case also proves the public refresh route fails closed with HTTP 503 when Cosmos is not configured. Test-only change; no runtime source, token semantics, rate-limit policy or acceptance-row status changes.
