@@ -234,3 +234,14 @@ Exact-head API-only CI [#45602030019](https://github.com/rajeevp727/turnova-plat
 ## Run 175 — AI-01 destination assertion correction
 
 Run174 exact-head CI [#45602671349](https://github.com/rajeevp727/turnova-platform/actions/runs/45602671349) passed Release compilation and 1,659/1,661 tests; the two failures were both in AI-01 test assertions. A broad replacement had changed the existing unavailable-provider fallback expectation to `Secret Clinic` while leaving the provider-enabled test expecting `HITEC City`. Commit [`0130aed62420fafb1ca5288a66fec9beab9c26e2`](https://github.com/rajeevp727/turnova-platform/commit/0130aed62420fafb1ca5288a66fec9beab9c26e2) now keeps the fallback expectation `HITEC City` and expects `Secret Clinic` only for the synthetic provider-enabled test. No production AI behavior changed. The new `UNION-SCOPE-002` test passed in that run. Fresh exact-head CI is required.
+
+
+## Run 176 — malformed persisted Union coverage metadata
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| UNION-COVERAGE-001 | A persisted Union has null `ZoneIds` or `ServiceClasses` while an otherwise eligible Cab Driver is assigned | `RideApiIntegrationTests.MalformedUnionCoverageMetadataIsExcludedFromDiscoveryAndPartnerActions` (two deterministic cases) | The malformed Union is excluded from Rider discovery and the UnionManager member list; private-document retrieval and selfie review return 404; Driver profile, assignment and Union audit remain unchanged; temporary review reservation is released |
+
+The API now validates the required coverage collections at both point-read and list-read boundaries. Invalid persisted records are treated as unavailable rather than dereferenced. [source/test commit `f3c80cc3228fe654c3a1e7090f78bdb878d9bb8c`](https://github.com/rajeevp727/turnova-platform/commit/f3c80cc3228fe654c3a1e7090f78bdb878d9bb8c) passed exact-head API-only [CI #45605922257](https://github.com/rajeevp727/turnova-platform/actions/runs/45605922257): **1,663/1,663 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (0 warnings/errors), native non-container Linux x64 publish (44,086,076 bytes; 125,829,120-byte limit), publish-script syntax, native verifier (11 negative fixtures plus valid fixture), artifact [15017702313](https://github.com/rajeevp727/turnova-platform/actions/runs/45605922257/artifacts/15017702313), ZIP SHA-256 `07413f7395caa22c0a9c59935c0725248800f49ed979d7be8c615169cf7e1b94`.
+
+The first source/test head [CI #45605244707](https://github.com/rajeevp727/turnova-platform/actions/runs/45605244707) failed compilation because the initial test referenced an out-of-scope helper; the corrected exact-head run above is the passing evidence. The tests use deterministic in-memory fixtures and private-media test storage. They do not establish live Cosmos serialization/partition/ETag behavior or production identity. No acceptance row is promoted.

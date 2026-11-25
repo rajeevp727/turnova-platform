@@ -1,3 +1,23 @@
+## Run 176 — 2026-11-25 — fail-closed persisted Union coverage metadata
+
+- **Platform phase:** API `in_progress`; Android/iOS `not_started`. API-first sequencing remains mandatory.
+- **Current item:** `PLATFORM-01` / `DRIVER-01` / `CAB-UNION-01` — validate persisted Union coverage collections before discovery and UnionManager partner actions.
+- **Active PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; base/main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`. API-only; no `src/mobile/` paths.
+- **Finding and implementation:** persisted `DriverUnion.ZoneIds` or `ServiceClasses` can be null despite their non-null model declarations. Point reads now treat such a Union as unavailable; list reads skip it. This protects Rider discovery, UnionManager member lists, private-document reads, selfie review, assignment and selected-ride eligibility from null dereferences or accidental eligibility.
+- **Regression:** `UNION-COVERAGE-001`, `RideApiIntegrationTests.MalformedUnionCoverageMetadataIsExcludedFromDiscoveryAndPartnerActions`, runs both missing-`ServiceClasses` and missing-`ZoneIds` fixtures. It asserts discovery excludes the malformed Union, the manager member list is empty, private document/selfie review return 404, profile/assignment/audit remain unchanged, and the temporary reservation is released.
+- **Intermediate CI correction:** [#45605244707](https://github.com/rajeevp727/turnova-platform/actions/runs/45605244707) failed compilation on the preceding head `d8d390250ef1a26eaf2fe8c6b179e6b56d63abbb` because the new test called a non-existent class-level `AssertNoStore` helper. The assertion was replaced with explicit Cache-Control/Pragma checks; no production code was implicated by that compile failure.
+- **Exact source/test evidence:** [source/test commit `f3c80cc3228fe654c3a1e7090f78bdb878d9bb8c`](https://github.com/rajeevp727/turnova-platform/commit/f3c80cc3228fe654c3a1e7090f78bdb878d9bb8c) passed exact-head API-only [CI #45605922257](https://github.com/rajeevp727/turnova-platform/actions/runs/45605922257): **1,663/1,663 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (0 warnings/errors), native non-container Linux x64 publish (44,086,076 bytes; 125,829,120-byte limit), publish-script syntax, native verifier (11 negative fixtures plus valid fixture), artifact [15017702313](https://github.com/rajeevp727/turnova-platform/actions/runs/45605922257/artifacts/15017702313), ZIP SHA-256 `07413f7395caa22c0a9c59935c0725248800f49ed979d7be8c615169cf7e1b94`.
+- **Scope:** backend API and deterministic tests only. Mobile-auth/mobile/Android/emulator/iOS/simulator jobs were intentionally skipped under the API-first phase gate. No Docker/container builds, mobile source, secrets, provider credentials, infrastructure or deployment changes.
+- **Acceptance:** strict **0/19 Verified** (16 In Progress; 3 Blocked: `DISPATCH-01`, `DRIVER-04`, `SUPPORT-01`). No row is promoted; this is not an implementation percentage.
+- **Review gate:** three owner-authored `COMMENTED` reviews, **0 independent approvals**, 0 unresolved threads. Independent human maintainer approval remains required; no self-approval, bypass or merge.
+- **Parked PRs:** #196/#198/#205/#206 remain Draft/parked. #204 remains trusted-LAN Android cleartext configuration only, not Android completion evidence. Historical #197/#207 merges without independent approval remain disclosed exceptions, not precedent.
+- **External gates:** live Cosmos ETag/412/partition/transaction/multi-instance/restart/failover/RU; production identity/key custody and UnionManager claim mapping; Cosmos credentials and non-container API hosting/TLS/trusted proxy/shared rate limiting; approved dispatch radius/zones/location freshness/negotiation lifetime/FIFO; maps/routing, SignalR/backplane, call/chat/push; private-media storage/scanning/consent/retention; support/escalation and reconciliation policy; Union legal approval; AI provider/model/credentials; later Android/iOS physical-device, signing, store and TestFlight evidence.
+- **Next exact action:** continue API-only auth/authorization/privacy/OpenAPI and persistence/idempotency audits; obtain independent human maintainer approval. After a permitted merge, re-read main and run a fresh API phase-exit audit before Android Rider, Android Driver, iOS Rider and iOS Driver in order.
+
+No Docker/container builds or deployments. No live Cosmos, production-provider or device validation is claimed.
+
+---
+
 ## Run 175 — 2026-11-25 — AI-01 destination fixture correction
 
 - **Platform phase:** API `in_progress`; Android/iOS `not_started`. API-first sequencing remains mandatory.
