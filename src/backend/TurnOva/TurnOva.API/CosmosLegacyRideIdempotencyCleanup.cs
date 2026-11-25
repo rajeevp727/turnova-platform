@@ -48,10 +48,12 @@ public static class CosmosLegacyRideIdempotencyCleanup
 
         try
         {
-            await container.DeleteItemAsync<RideIdempotencyRecord>(
-                id,
-                partitionKey,
-                new ItemRequestOptions { IfMatchEtag = etag },
+            _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => container.DeleteItemAsync<RideIdempotencyRecord>(
+                    id,
+                    partitionKey,
+                    new ItemRequestOptions { IfMatchEtag = etag },
+                    cancellationToken),
                 cancellationToken);
             return true;
         }
