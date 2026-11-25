@@ -46,9 +46,7 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
     public async Task AddAsync(DriverQueueEntry entry, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        ArgumentNullException.ThrowIfNull(entry);
-        if (entry.JoinedAt == default)
-            throw new ArgumentException("Queue join timestamp is required.", nameof(entry));
+        DriverQueueEntry.ValidateForJoin(entry);
 
         var document = new QueueEntryDocument
         {
