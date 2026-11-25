@@ -2514,7 +2514,7 @@ unionManagerApi.MapGet("/drivers", async (ClaimsPrincipal user, CancellationToke
         var union = await FindUnionAsync(assignment.UnionId, ct);
         if (union is null || union.Status != "Active" ||
             union.ServiceClasses is null ||
-            !union.ServiceClasses.Contains("cab", StringComparison.OrdinalIgnoreCase))
+            !union.ServiceClasses.Contains("cab", StringComparer.OrdinalIgnoreCase))
             continue;
         var profile = await FindDriverProfileAsync(assignment.DriverId, ct);
         if (profile is null || !string.Equals(profile.ServiceClass, "cab", StringComparison.OrdinalIgnoreCase))
