@@ -301,6 +301,25 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task DuplicateSubjectAliasesAreRejectedEvenWhenTheirValuesMatch()
+    {
+        using var factory = new AuthApiFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer",
+            CreateToken(includeNameId: true, nameIdValue: "rider-123"));
+
+        using var response = await client.GetAsync("/api/v1/auth/me");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        var challenge = string.Join(" ", response.Headers.WwwAuthenticate.Select(value => value.ToString()));
+        Assert.Contains("Bearer", challenge, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("error=", challenge, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("error_description", challenge, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task PublicAuthEndpointsAreRateLimitedByServerObservedRemoteAddress()
     {
         using var factory = new AuthApiFactory();
@@ -507,7 +526,7 @@ public sealed class AuthApiIntegrationTests
         Assert.Contains("Auth:Jwt", exception.ToString(), StringComparison.Ordinal);
     }
 
-    private static string CreateToken(bool includeSubject = true, bool includeNameId = false, string algorithm = SecurityAlgorithms.HmacSha256, bool includeSecondRole = false, bool includeRole = true, string roleValue = "Rider")
+    private static string CreateToken(bool includeSubject = true, bool includeNameId = false, string algorithm = SecurityAlgorithms.HmacSha256, bool includeSecondRole = false, bool includeRole = true, string roleValue = "Rider", string? nameIdValue = null)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SigningKey));
         var credentials = new SigningCredentials(key, algorithm);
@@ -518,7 +537,7 @@ public sealed class AuthApiIntegrationTests
         };
         if (includeRole) claims.Add(new Claim("role", roleValue));
         if (includeSubject) claims.Add(new Claim(JwtRegisteredClaimNames.Sub, "rider-123"));
-        if (includeNameId) claims.Add(new Claim("nameid", "second-subject"));
+        if (includeNameId) claims.Add(new Claim("nameid", nameIdValue ?? "second-subject"));
         if (includeSecondRole) claims.Add(new Claim("role", "Driver"));
         var token = new JwtSecurityToken(Issuer, Audience, claims,
             DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow.AddMinutes(5), credentials);
