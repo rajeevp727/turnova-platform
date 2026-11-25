@@ -183,7 +183,6 @@ public sealed class CosmosMigrationDatabaseTests
         createdResponse.VerifyGet(value => value.Resource, Times.Once);
         createdResponse.VerifyGet(value => value.Container, Times.Once);
         currentResponse.VerifyGet(value => value.Resource, Times.Once);
-        currentResponse.VerifyGet(value => value.ETag, Times.Once);
         currentResponse.VerifyNoOtherCalls();
         container.VerifyGet(value => value.Id, Times.Once);
         container.Verify(value => value.ReadContainerAsync(
@@ -350,6 +349,7 @@ public sealed class CosmosMigrationDatabaseTests
         createdResponse.VerifyGet(value => value.Resource, Times.Once);
         createdResponse.VerifyGet(value => value.Container, Times.Once);
         currentResponse.VerifyGet(value => value.Resource, Times.Once);
+        currentResponse.VerifyGet(value => value.ETag, Times.Once);
         currentResponse.VerifyNoOtherCalls();
         container.VerifyGet(value => value.Id, Times.Once);
         container.Verify(value => value.ReadContainerAsync(
