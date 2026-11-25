@@ -1,3 +1,13 @@
+## Dispatch exception audit input, idempotency and resource contracts — Run 195
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| DISPATCH-AUDIT-INPUT-001 | Direct application, persistence-writer and in-memory-store calls contain missing actor/zone/service/trace, non-Cab service, overlong/unsafe/Unicode trace or an unapproved reason category | `DispatchExceptionAuditInputBoundaryTests.AuditWriterRejectsInvalidMetadataBeforeCallingPersistence`; `DispatchExceptionAuditInputBoundaryTests.InMemoryStoreRejectsInvalidMetadataBeforeDeduplicationOrAuditMutation` | All invalid values fail before audit-store create/read, deduplication or in-memory audit mutation |
+| DISPATCH-AUDIT-IDEMPOTENCY-001 | In-memory dispatch-exception audit receives a matching retry, then reuses the same trace with a different actor or reason | `DispatchExceptionAuditInputBoundaryTests.InMemoryStoreAcceptsMatchingRetryAndRejectsTraceReuseWithDifferentMetadata` | Matching retry remains idempotent; conflicting trace reuse fails closed and preserves one canonical event |
+| DISPATCH-AUDIT-RESOURCE-001 | A dispatch-exception writer conflict read-back returns a canonical event with a default or non-UTC timestamp | `DispatchExceptionAuditWriterTests.RecordAsync_DoesNotAcceptConflictWhenCanonicalMetadataDiffers` (timestamp-default and timestamp-offset cases) | Conflict is accepted only when safe identity metadata matches and the canonical timestamp is non-default UTC |
+
+`DispatchExceptionAuditInput.Validate` is shared by `QueueService`, `DispatchExceptionAuditWriter` and `InMemoryQueueStore`. Cancellation remains first at every boundary. The writer rejects malformed persisted timestamps during conflict verification. Exact source/test API-only CI [#45711061921](https://github.com/rajeevp727/turnova-platform/actions/runs/45711061921) passed **1,763/1,763 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (0 warnings/errors), native non-container Linux x64 publish (44,088,592 bytes), publish-script syntax and verifier (11 negative fixtures plus valid fixture); artifact [15067492151](https://github.com/rajeevp727/turnova-platform/actions/runs/45711061921/artifacts/15067492151), ZIP SHA-256 `9d3de27065ac7e48d79c4b498787754b497edc6fcb522a538fc02cb1af6c356f`.
+
 ## Queue store read and mutation input validation — Run 194
 
 | Test-plan ID | Scenario | Automated evidence | Expected result |
