@@ -298,3 +298,14 @@ Source/test head `5bb43ebcbd0f0ce7db84a99eee8d74f0e6ecba0e` passed exact-head AP
 The four role-specific routes share `/{role}/register` and `/{role}/login` endpoint handlers. This closes the two missing role/operation combinations left by AUTH-API-078 without changing runtime behavior.
 
 Exact source/test API-only CI [#45629147447](https://github.com/rajeevp727/turnova-platform/actions/runs/45629147447) passed on [`6d1c3935`](https://github.com/rajeevp727/turnova-platform/commit/6d1c39359ba482f825d8037107560fb6210e1615): **1,671/1,671 backend tests (0 failed, 0 skipped)**; .NET 10 Release build (0 warnings/errors); native non-container Linux x64 publish; publish-script syntax; native verifier (11 negative fixtures plus valid fixture); artifact [15029628943](https://github.com/rajeevp727/turnova-platform/actions/runs/45629147447/artifacts/15029628943), 17,040,759 bytes, ZIP SHA-256 `9d552707ef420e9a749553b6f968529bfa33782967d1c0e99a21fbd5d4447a9c`. Mobile-auth/mobile/Android/emulator/iOS/simulator jobs were intentionally skipped under the API-first phase gate.
+
+
+## Run 181 — unsupported media types on every public authentication route
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| AUTH-API-080 | A `text/plain` request body is sent to Rider registration, Driver registration, Rider login, Driver login and refresh | `AuthApiIntegrationTests.UnsupportedMediaTypeOnPublicAuthEndpointsIsRejectedWithoutCaching` (five theory cases) | Minimal-API body binding returns HTTP 415 and the API response policy retains `Cache-Control: no-store` plus `Pragma: no-cache`; no identity handler or storage operation is reached |
+
+This is a test-only regression. It extends malformed-JSON coverage (AUTH-API-079) to unsupported media types for all five public auth endpoints; no runtime API behavior or mobile source changed.
+
+Exact source/test API-only CI [#45639725625](https://github.com/rajeevp727/turnova-platform/actions/runs/45639725625) passed on `fb69378f73b54f0b4d3f80281a765dcb1d72d5b8`: **1,676/1,676 backend tests (0 failed, 0 skipped)**; .NET 10 Release build (0 warnings, 0 errors); native non-container Linux x64 publish (44,086,076 bytes); publish-script syntax; native verifier (11 negative fixtures plus valid fixture). Artifact [15034314000](https://github.com/rajeevp727/turnova-platform/actions/runs/45639725625/artifacts/15034314000), 17,040,783 bytes; ZIP SHA-256 `06e2ffc67c575d7543066d8528c1ad8ce86bb96b11f21776b2518b417bd9394d`. Mobile-auth/mobile/Android/emulator/iOS/simulator jobs were intentionally skipped under the API-first phase gate.
