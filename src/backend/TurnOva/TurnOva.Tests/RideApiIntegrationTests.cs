@@ -8257,6 +8257,32 @@ public sealed partial class RideApiIntegrationTests
     }
 
     [Fact]
+    public async Task UnionManagerMemberListExcludesAssignmentsFromUnionsThatNoLongerServeCab()
+    {
+        using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
+        const string cabUnion = "union-manager-cab-serving";
+        const string nonCabUnion = "union-manager-non-cab";
+        const string cabDriver = "union-manager-cab-driver";
+        const string staleDriver = "union-manager-stale-cab-driver";
+
+        SeedBookableDriver(factory, cabDriver, cabUnion);
+        SeedBookableDriver(factory, staleDriver, nonCabUnion);
+        var unions = factory.Services.GetRequiredService<ConcurrentDictionary<string, DriverUnion>>();
+        unions[nonCabUnion] = unions[nonCabUnion] with { ServiceClasses = ["scooty"] };
+
+        using var manager = factory.CreateUnionManagerClient(
+            new[] { cabUnion, nonCabUnion }, "union-manager-cab-scope");
+        using var response = await manager.GetAsync("/api/v1/union/drivers");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var members = await response.Content.ReadFromJsonAsync<List<JsonElement>>();
+        Assert.NotNull(members);
+        var member = Assert.Single(members);
+        Assert.Equal(cabDriver, member.GetProperty("driverId").GetString());
+        Assert.Equal(cabUnion, member.GetProperty("unionId").GetString());
+    }
+
+    [Fact]
     public async Task UnionManagerWithMultipleSignedUnionClaimsSeesOnlyClaimedUnionDrivers()
     {
         using var factory = new TurnOvaApiFactory(legacyFifoRiderRequestsEnabled: false);
