@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using Microsoft.Azure.Cosmos;
 using TurnOva.Domain.Dispatch;
+using TurnOva.Infrastructure.Database;
 
 namespace TurnOva.API;
 
@@ -22,8 +23,10 @@ public static class UnionCreateIfAbsent
 
         try
         {
-            await unionContainer.CreateItemAsync(
-                union, new PartitionKey(union.UnionId), cancellationToken: cancellationToken);
+            _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => unionContainer.CreateItemAsync(
+                    union, new PartitionKey(union.UnionId), cancellationToken: cancellationToken),
+                cancellationToken);
             return true;
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
