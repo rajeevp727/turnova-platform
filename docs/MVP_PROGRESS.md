@@ -1,3 +1,20 @@
+## Run 169 — 2026-11-25 — UnionManager multi-union claim scoping
+
+- **Platform phase:** API `in_progress`; Android/iOS `not_started`. API-first sequencing remains enforced.
+- **Active PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; main/base `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`; source/test commit [`3c8e8e38`](https://github.com/rajeevp727/turnova-platform/commit/3c8e8e384d1b2900454ce7c85ab19a5da2e0d27b). API-only change; 0 `src/mobile/` paths.
+- **PRD contract:** a UnionManager may hold one or more signed `unionId` claims and may review only Cab drivers actively assigned to those unions. The API already scopes list/review/document/reconciliation reads to the signed claim set; caller-supplied union identifiers must not widen that set.
+- **Deterministic evidence:** `RideApiIntegrationTests.UnionManagerWithMultipleSignedUnionClaimsSeesOnlyClaimedUnionDrivers` creates three active Cab memberships, signs the manager with two union claims, and requests `/api/v1/union/drivers?unionId=<outside-union>`. It asserts that exactly the two claimed-union drivers are returned and the outside-union driver is excluded. Test-plan ID: `UNION-SCOPE-001`.
+- **Exact source/test API-only CI:** [#45594320195](https://github.com/rajeevp727/turnova-platform/actions/runs/45594320195) passed **1,651/1,651 backend tests (0 failed, 0 skipped)**; .NET 10 Release build (0 warnings/errors); native non-container Linux x64 publish; publish-script syntax; native publish verifier (11 negative fixtures plus valid fixture). Artifact [15012387518](https://github.com/rajeevp727/turnova-platform/actions/runs/45594320195/artifacts/15012387518), 17,040,288 bytes; ZIP SHA-256 `cbaf1367c7b37a58ce0cf9cbcbd84f010df1b388d492fb3d2464ad99c42cc625`.
+- **CI phase gate:** scope/backend passed. Mobile-auth, mobile, Android/emulator and iOS/simulator jobs were intentionally skipped; this is API evidence only.
+- **Scope/risk:** one backend integration-test file and test-only factory helper; no production API behavior, auth policy, persistence schema, mobile source, infrastructure, secrets, Docker/container build or deployment changed.
+- **Acceptance:** strict **0/19 Verified** (16 In Progress, 3 Blocked: `DISPATCH-01`, `DRIVER-04`, `SUPPORT-01`). No row is promoted; engineering evidence remains distinct from strict acceptance.
+- **Review:** three owner-authored `COMMENTED` reviews, 0 independent approvals, 0 unresolved review threads and no requested reviewer. Do not self-approve, bypass protection or merge.
+- **Parked PRs:** #196/#198/#205/#206 remain Draft/parked. #204 is trusted-LAN Android cleartext configuration only. Historical #197/#207 merges without independent approval remain disclosed exceptions, not precedent.
+- **External gates:** live Cosmos partition/ETag/transaction/multi-instance/restart/failover/RU; production identity-provider role/UnionManager claim issuance and key custody; Cosmos credentials, API hosting/TLS, trusted proxy/shared rate limiting; approved dispatch radius/zones/location freshness/negotiation lifetime/FIFO; maps/routing and SignalR/call/chat/push; private-media storage/scanning/consent/retention; support/escalation and reconciliation policy; Union legal approval; later Android/iOS physical-device, signing, store and TestFlight evidence. No production readiness is claimed.
+- **Next exact action:** continue API-only Cosmos persistence-contract audit: inventory remaining direct Cosmos writes and verify committed-write cancellation precedence, ETag conflict handling, exact resource identity and deterministic failure tests. Obtain independent human maintainer approval; after a permitted merge, re-read main and run a fresh API phase-exit audit before Android Rider, Android Driver, iOS Rider and iOS Driver.
+
+No Docker/container builds or deployments. No live Cosmos, production-provider or device validation is claimed.
+
 ## Run 168 — 2026-11-25 — JWT role-claim alias ambiguity
 
 - **Platform phase:** API `in_progress`; Android/iOS `not_started`. API-first sequencing remains enforced.

@@ -166,3 +166,16 @@ The bearer validator now treats `role`, `roles` and the `ClaimTypes.Role` URI as
 **Exact source/test evidence:** [commit `fb0c85d2`](https://github.com/rajeevp727/turnova-platform/commit/fb0c85d26e4ea255eebfa29a40f4d329412b781a) passed API-only CI [#45592523126](https://github.com/rajeevp727/turnova-platform/actions/runs/45592523126): **1,650/1,650 backend tests (0 failed, 0 skipped)**, .NET 10 Release build, native non-container Linux x64 publish, publish-script syntax and verifier (11 negative fixtures plus valid fixture). Artifact [15010434175](https://github.com/rajeevp727/turnova-platform/actions/runs/45592523126/artifacts/15010434175), 17,040,300 bytes; ZIP SHA-256 `668b3549e899c2e32ca3a355fa4e9de4396ca99774b35b10fb84c068f04fadbc`.
 
 No acceptance row is promoted. This is deterministic integration evidence, not live production identity-provider claim-mapping evidence.
+
+
+## Run 169 — UnionManager multi-union claim scope
+
+The PRD permits a UnionManager JWT to carry one or more signed `unionId` claims. The member-list API must use that signed claim set and must not widen authorization from caller-supplied query parameters.
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| UNION-SCOPE-001 | A UnionManager with two signed `unionId` claims lists active Cab members while supplying an unrelated `unionId` query parameter | `RideApiIntegrationTests.UnionManagerWithMultipleSignedUnionClaimsSeesOnlyClaimedUnionDrivers` | Exactly the Cab drivers assigned to the two signed unions are returned; the outside-union driver is excluded and caller input cannot expand scope |
+
+**Exact source/test evidence:** [commit `3c8e8e38`](https://github.com/rajeevp727/turnova-platform/commit/3c8e8e384d1b2900454ce7c85ab19a5da2e0d27b) passed API-only CI [#45594320195](https://github.com/rajeevp727/turnova-platform/actions/runs/45594320195): **1,651/1,651 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (0 warnings/errors), native non-container Linux x64 publish, publish-script syntax and verifier (11 negative fixtures plus valid fixture). Artifact [15012387518](https://github.com/rajeevp727/turnova-platform/actions/runs/45594320195/artifacts/15012387518), 17,040,288 bytes; ZIP SHA-256 `cbaf1367c7b37a58ce0cf9cbcbd84f010df1b388d492fb3d2464ad99c42cc625`.
+
+This is deterministic API integration evidence for signed-claim scoping, not live production identity-provider claim issuance evidence. No acceptance row is promoted.
