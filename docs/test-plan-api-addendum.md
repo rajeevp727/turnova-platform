@@ -262,3 +262,14 @@ Exact source/test API-only CI [#45610227195](https://github.com/rajeevp727/turno
 The Run177 auth cache-safety regression now also exercises authenticated `POST /api/v1/auth/logout` with a valid Rider JWT and no configured Cosmos container; it must return HTTP 503 with both non-cacheable headers. This extends `AUTH-API-076` to the full register/login/refresh/logout lifecycle failure surface.
 
 Exact source/test API-only CI [#45611574478](https://github.com/rajeevp727/turnova-platform/actions/runs/45611574478) passed on `36ae609a33be05cdb3eba215fd4af6b796633b2c`: **1,665/1,665 backend tests (0 failed, 0 skipped)**; .NET 10 Release build (0 warnings/errors); native non-container Linux x64 publish (44,086,076 bytes; 125,829,120-byte limit); publish-script syntax; native publish verifier (11 negative fixtures plus valid fixture); artifact [15020237803](https://github.com/rajeevp727/turnova-platform/actions/runs/45611574478/artifacts/15020237803), 17,040,803 bytes, ZIP SHA-256 `0b1d7f9a400b21b01e27a0f4827b7057812747f33d4fe5662f661c79e30bd1e0`. Mobile-auth/mobile/Android/emulator/iOS/simulator jobs were intentionally skipped under the API-first phase gate.
+
+
+## Run 178 — anonymous logout authorization and cache-safety
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| AUTH-API-077 | Anonymous `POST /api/v1/auth/logout` while no Cosmos storage is configured | `AuthApiIntegrationTests.LogoutRejectsAnonymousRequest` | Authorization rejects the request with HTTP 401 before logout/storage work; response retains `Cache-Control: no-store` and `Pragma: no-cache` |
+
+The existing logout storage-failure regression uses a valid Rider JWT and verifies HTTP 503. This additional case covers the unauthenticated route boundary independently, proving the endpoint does not reach storage for an anonymous caller and the global API cache policy applies to the 401. Test-only change; no runtime source, token semantics, mobile source, rate-limit policy or acceptance-row status changes.
+
+Exact source/test API-only CI [#45620586804](https://github.com/rajeevp727/turnova-platform/actions/runs/45620586804) passed on `c01e5968db43b031879d41be9ca515ebbef13c45`: **1,666/1,666 backend tests (0 failed, 0 skipped)**; .NET 10 Release build (0 warnings/errors); native non-container Linux x64 publish (44,086,072 bytes; 125,829,120-byte limit); publish-script syntax; native publish verifier (11 negative fixtures plus valid fixture); artifact [15024930817](https://github.com/rajeevp727/turnova-platform/actions/runs/45620586804/artifacts/15024930817), 17,040,772 bytes, ZIP SHA-256 `400d02e6a6e5ace71fede8754cdb216f174ee4d22816d167a0d0cf0b65bbab55`. Scope/backend passed. Mobile-auth/mobile/Android/emulator/iOS/simulator jobs were intentionally skipped under the API-first gate.

@@ -1,3 +1,18 @@
+## Run 178 — 2026-11-25 — anonymous logout authorization and cache-safety
+
+- **Platform phase:** API `in_progress`; Android/iOS `not_started`. API-first gate unchanged.
+- **Current item:** `AUTH-01` / `AUTH-02` — complete explicit authorization/cache-policy coverage for the public auth lifecycle.
+- **Active PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; base/main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`; source/test head [`c01e5968`](https://github.com/rajeevp727/turnova-platform/commit/c01e5968db43b031879d41be9ca515ebbef13c45).
+- **Finding:** the logout storage-unavailable test used a valid Rider JWT; the anonymous `POST /api/v1/auth/logout` path did not have a dedicated regression proving authorization occurs before storage access and the 401 remains non-cacheable.
+- **Implementation:** test-only `AUTH-API-077` adds `AuthApiIntegrationTests.LogoutRejectsAnonymousRequest`. It requires HTTP 401 and asserts `Cache-Control: no-store` plus `Pragma: no-cache`. No runtime API behavior, mobile source or product policy changed.
+- **Exact source/test CI:** [#45620586804](https://github.com/rajeevp727/turnova-platform/actions/runs/45620586804) passed **1,666/1,666 backend tests (0 failed, 0 skipped)**; .NET 10 Release build (0 warnings/errors); native non-container Linux x64 publish (44,086,072 bytes; 125,829,120-byte limit); publish-script syntax; native publish verifier (11 negative fixtures plus valid fixture); artifact [15024930817](https://github.com/rajeevp727/turnova-platform/actions/runs/45620586804/artifacts/15024930817), 17,040,772 bytes, ZIP SHA-256 `400d02e6a6e5ace71fede8754cdb216f174ee4d22816d167a0d0cf0b65bbab55`. Scope/backend passed. Mobile-auth/mobile/Android/emulator/iOS/simulator jobs were intentionally skipped under the API-first gate.
+- **Acceptance:** strict **0/19 Verified** (16 In Progress, 3 Blocked: `DISPATCH-01`, `DRIVER-04`, `SUPPORT-01`). No row promoted; AI-01 remains supplemental.
+- **Review:** PR #200 remains open/non-draft/mergeable, with three owner-authored `COMMENTED` reviews, 0 independent approvals and 0 unresolved threads. Independent human maintainer approval remains mandatory. No self-approval, bypass or merge.
+- **Parked PRs:** #196/#198/#205/#206 remain Draft/parked. #204 is trusted-LAN Android cleartext configuration only. Historical #197/#207 merges without independent approval remain disclosed process exceptions, not precedent.
+- **External gates:** live Cosmos ETag/partition/transaction/multi-instance/restart/failover/RU; production identity/key custody and UnionManager claim mapping; Cosmos credentials and non-container API hosting/TLS/trusted proxy/shared rate limiting; approved dispatch radius/zones/location freshness/negotiation lifetime/FIFO; maps/routing, SignalR/backplane, call/chat/push; private-media storage/scanning/consent/retention; support/escalation and reconciliation policy; Union legal approval; AI provider/model/credentials; later Android/iOS physical-device, signing, store and TestFlight evidence.
+
+No Docker/container builds or deployments. No live Cosmos, production-provider or device validation is claimed.
+
 ## Run 177 — 2026-11-25 — public authentication failure cache-safety
 
 - **Platform phase:** API `in_progress`; Android/iOS `not_started`. API-first gate unchanged.
