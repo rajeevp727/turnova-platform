@@ -31,8 +31,10 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
 
         try
         {
-            var response = await locks.CreateItemAsync(
-                document, new PartitionKey(document.Id), cancellationToken: cancellationToken);
+            var response = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => locks.CreateItemAsync(
+                    document, new PartitionKey(document.Id), cancellationToken: cancellationToken),
+                cancellationToken);
             return ReadLeaseResponse(response, owner, CancellationToken.None);
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
@@ -84,11 +86,13 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
 
         try
         {
-            var response = await locks.ReplaceItemAsync(
-                replacement,
-                replacement.Id,
-                new PartitionKey(replacement.Id),
-                new ItemRequestOptions { IfMatchEtag = expected.ETag },
+            var response = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => locks.ReplaceItemAsync(
+                    replacement,
+                    replacement.Id,
+                    new PartitionKey(replacement.Id),
+                    new ItemRequestOptions { IfMatchEtag = expected.ETag },
+                    cancellationToken),
                 cancellationToken);
             return ReadLeaseResponse(response, newOwner, CancellationToken.None);
         }
@@ -115,10 +119,12 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
 
         try
         {
-            await locks.DeleteItemAsync<CosmosMigrationLeaseDocument>(
-                expected.Id,
-                new PartitionKey(expected.Id),
-                new ItemRequestOptions { IfMatchEtag = expected.ETag },
+            _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => locks.DeleteItemAsync<CosmosMigrationLeaseDocument>(
+                    expected.Id,
+                    new PartitionKey(expected.Id),
+                    new ItemRequestOptions { IfMatchEtag = expected.ETag },
+                    cancellationToken),
                 cancellationToken);
             return true;
         }
