@@ -353,9 +353,9 @@ public sealed class AuthApiIntegrationTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertNoStoreHeaders(response);
-        var drivers = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(JsonValueKind.Array, drivers.ValueKind);
-        Assert.Empty(drivers.EnumerateArray());
+        var drivers = await response.Content.ReadFromJsonAsync<List<JsonElement>>();
+        Assert.NotNull(drivers);
+        Assert.Empty(drivers);
     }
 
     [Fact]
