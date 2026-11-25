@@ -309,8 +309,8 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
                 auditEvent.ReasonCategory is null,
             QueueAuditEventTypes.DispatchException =>
                 auditEvent.OfferId is null &&
-                !string.IsNullOrWhiteSpace(auditEvent.TraceId) &&
-                !string.IsNullOrWhiteSpace(auditEvent.ReasonCategory),
+                IsSafeTraceId(auditEvent.TraceId) &&
+                IsAllowedQueueAuditReasonCategory(auditEvent.ReasonCategory),
             _ => false
         };
 
@@ -324,6 +324,17 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
 
         return auditEvent;
     }
+
+    private static bool IsSafeTraceId(string? traceId) =>
+        !string.IsNullOrWhiteSpace(traceId) &&
+        traceId.Length <= 128 &&
+        traceId.All(character =>
+            char.IsAsciiLetterOrDigit(character) || character is ':' or '-' or '_');
+
+    private static bool IsAllowedQueueAuditReasonCategory(string? reasonCategory) =>
+        reasonCategory is QueueAuditReasonCategories.QueueReadFailed or
+            QueueAuditReasonCategories.DriverReservationFailed or
+            QueueAuditReasonCategories.DriverReservationPromotionRecovered;
 
     private static QueueEntryDocument RequireResource(
         ItemResponse<QueueEntryDocument> response,
