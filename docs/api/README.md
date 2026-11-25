@@ -43,8 +43,15 @@ Public register/login/refresh endpoints use a fixed-window limiter partitioned b
 
 After JWT signature, issuer, audience and lifetime validation, the API canonicalizes the single accepted subject into both `sub` and `ClaimTypes.NameIdentifier`. Every application endpoint under `/api/v1` or the ride SignalR hub that carries explicit authorization metadata requires that canonical subject; a signed token with no usable subject receives HTTP 403 before authenticated handlers, Union reads/reviews, reservation changes, audit writes or SignalR membership execute. Unauthenticated public routes, operations routes protected by the separate API-key policy, and auth endpoints marked `AllowAnonymous` remain unaffected.
 
-The only subject-less exception among authenticated endpoints is the explicitly marked `/api/v1/assistance` group. Its approved rate limiter falls back to the server-observed remote IP when no subject exists; it does not access or mutate user-owned ride/Union state. Arbitrary forwarded-for values are not used as the fallback partition. AUTH-API-059 covers subjectless UnionManager reads/selfie review, auth-profile access, SignalR negotiation, public-auth bypass and AI-assistance IP fallback.
+The only subject-less exception among authenticated endpoints is the explicitly marked `/api/v1/assistance` group. Its approved rate limiter falls back to the server-observed remote IP when no subject exists; it does not access or mutate user-owned ride/Union state. Arbitrary forwarded-for values are not used as the fallback partition. AUTH-API-059 covers subjectless UnionManager reads/selfie review, auth-profile access, public-auth bypass and AI-assistance IP fallback. `SIGNALR-AUTH-001..003` separately cover ride-hub negotiate authentication, query-token path scoping and subjectless-principal rejection.
 
+### Ride-tracking SignalR authentication
+
+The `/hubs/rides` endpoint requires the same validated TurnOva JWT as the REST API. SignalR negotiate and hub requests may use the `access_token` query parameter only under the `/hubs/rides` path for transports that cannot set an Authorization header; ordinary `/api/v1` routes do not accept query-string bearer tokens. Hub responses are private and carry no-store/no-cache directives.
+
+After authentication, `RideTrackingHub.OnConnectedAsync` grants a ride group only to the owning Rider or the assigned Driver for the exact stored RideId. The Driver notification group is restricted to the authenticated Driver's own ID. Subjectless signed JWTs receive HTTP 403 before negotiation or group membership. Hosted clients must use HTTPS/WSS, and ingress/proxy/access telemetry must redact `access_token` query values because URLs can otherwise be logged.
+
+Deterministic regressions `SIGNALR-AUTH-001..003` cover anonymous negotiate denial, hub-only query-token handling and subjectless-token rejection. They do not establish live WebSocket delivery, multi-instance backplane, reconnect or physical-device behavior.
 ### API and realtime response cache policy
 
 

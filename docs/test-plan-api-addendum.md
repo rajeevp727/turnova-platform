@@ -101,3 +101,17 @@ These deterministic tests cover the Cosmos-backed SignalR connection path. They 
 **Exact source/test evidence:** [PR #200 head `5dbfb67badca92d6a80b0bb9e287ebf675695f65`](https://github.com/rajeevp727/turnova-platform/commit/5dbfb67badca92d6a80b0bb9e287ebf675695f65) passed API-only CI [#45565641809](https://github.com/rajeevp727/turnova-platform/actions/runs/45565641809): **1,631/1,631 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (0 warnings/errors), native non-container Linux x64 API publish, publish-script syntax and verifier (11 negative fixtures plus valid fixture). Artifact [14999882815](https://github.com/rajeevp727/turnova-platform/actions/runs/45565641809/artifacts/14999882815), 17,040,040 bytes; ZIP SHA-256 `0fa4962fcf2482d720da17fa7a26465dd4ba0762b4948045252c6ae1969c9528`.
 
 The API/Infrastructure scan covered 35 C# source files and found no raw Cosmos SDK point-read/page-read/Resource/ETag access outside the shared guard after this change. The documentation-bearing checkpoint `62fe2b826bc39dfbcca219bd36fe5445b17b774f` also passed exact-head API-only CI [#45566520367](https://github.com/rajeevp727/turnova-platform/actions/runs/45566520367): 1,631/1,631 tests, Release build, native non-container publish/verifier, artifact [15000700200](https://github.com/rajeevp727/turnova-platform/actions/runs/45566520367/artifacts/15000700200). No acceptance row is promoted; `REALTIME-01` remains In Progress. SDK mocks do not prove live Cosmos or SignalR behavior.
+
+## Run 165 — SignalR negotiate JWT boundary
+
+These integration tests exercise the real ASP.NET Core SignalR negotiate endpoint through the Testing host. They validate HTTP authentication and cache policy, not a live WebSocket transport or backplane.
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| SIGNALR-AUTH-001 | Anonymous client posts to `/hubs/rides/negotiate` | `AuthApiIntegrationTests.RideHubNegotiationRequiresAnAuthenticatedJwt` | HTTP 401 with private no-store/no-cache headers; no negotiation response is issued |
+| SIGNALR-AUTH-002 | A valid Rider JWT is supplied as `access_token` on the ride-hub negotiate request and then on an ordinary API request | `AuthApiIntegrationTests.RideHubNegotiationAcceptsQueryBearerOnlyOnRideHub` | Hub negotiate returns HTTP 200; `/api/v1/auth/me?access_token=...` remains HTTP 401 with no-store/no-cache |
+| SIGNALR-AUTH-003 | A valid signed JWT with a role but no canonical subject is supplied to the ride-hub negotiate endpoint | `AuthApiIntegrationTests.SubjectlessSignedTokenCannotNegotiateRideHub` | HTTP 403 with no-store/no-cache before SignalR negotiation |
+
+**Exact source/test evidence:** [PR #200 source/test head `b26063b356003278e5b52e4440256315f1d05968`](https://github.com/rajeevp727/turnova-platform/commit/b26063b356003278e5b52e4440256315f1d05968) passed API-only CI [#45572865415](https://github.com/rajeevp727/turnova-platform/actions/runs/45572865415): 1,634/1,634 backend tests, Release build (0 warnings/errors), native non-container Linux x64 API publish, publish-script syntax and native verifier (11 negative fixtures plus valid fixture). Artifact [15003437229](https://github.com/rajeevp727/turnova-platform/actions/runs/45572865415/artifacts/15003437229), 17,039,981 bytes; ZIP SHA-256 `41967a707e3a5deaf4351b1014563421a2ca0ec522293ef5529c1abbb459779c`.
+
+No runtime source changed. Query-string token logging must be redacted by hosted ingress/proxy/telemetry; live WebSocket/backplane/reconnect and physical-device evidence remain external.

@@ -1,3 +1,16 @@
+# Run 165 current handoff — 2026-11-25
+
+- **Phase:** API `in_progress`; Android/iOS `not_started`. Main phase metadata is stale and cannot authorize Android.
+- **Active PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; source/test head `b26063b356003278e5b52e4440256315f1d05968`; base/main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`. Source/test CI [#45572865415](https://github.com/rajeevp727/turnova-platform/actions/runs/45572865415) passed 1,634/1,634 tests, Release build 0 warnings/errors, native non-container publish/verifier; artifact 15003437229.
+- **Run 165:** added three API integration tests for SignalR negotiate authentication: anonymous requests are 401/no-store, query access tokens are accepted only on `/hubs/rides`, and a signed subjectless JWT is 403/no-store before negotiation. No runtime behavior changed.
+- **PR state at source/test checkpoint:** open, non-draft, mergeable; 1,282 ahead / 0 behind, 257 changed files, 0 mobile paths. Three owner-authored COMMENTED reviews, 0 independent approvals, 0 unresolved threads, no requested reviewer. PRs #196/#198/#205/#206 remain Draft/parked.
+- **Acceptance:** strict 0/19 Verified (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). REALTIME-01 remains In Progress; no row promoted.
+- **Next:** verify the docs-bearing head's own exact-head CI, continue API-only work, and obtain independent maintainer approval. Never self-approve or merge without permission. After a permitted merge, re-read main and run a fresh API phase-exit audit before Android Rider.
+- **External gates:** live Cosmos ETag/transaction/partition/multi-instance/restart/failover/RU and Staging/QA; production identity/key custody, Cosmos credentials, trusted proxy/shared rate limiting and API hosting/TLS; approved dispatch zones/radius/location freshness/negotiation lifetime/FIFO; live SignalR/backplane/maps/routing/call/chat/push; private-media storage/scanning/consent/retention; support/reconciliation policy; Union legal approval; later Android/iOS physical-device, signing, store and TestFlight evidence.
+- **Historical process exceptions:** PRs #197 and #207 merged without independent approval; neither is precedent.
+
+---
+
 # Run 164 current handoff — 2026-11-25
 
 - **Phase:** API `in_progress`; Android/iOS `not_started`. Continue API-only work; the main phase file is stale and cannot authorize Android.
