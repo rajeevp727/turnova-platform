@@ -300,4 +300,47 @@ public sealed class CosmosReservationResourceContractTests
         container.VerifyNoOtherCalls();
     }
 
+    [Theory]
+    [InlineData("different-rider", "ride-1", "request-hash")]
+    [InlineData("rider-1", " ", "request-hash")]
+    [InlineData("rider-1", "ride-1", " ")]
+    public async Task RiderPromotionRejectsMalformedResourceBeforeStartingBatch(
+        string resourceRiderId,
+        string resourceRideId,
+        string resourceRequestHash)
+    {
+        var response = new Mock<ItemResponse<RiderActiveBookingReservation>>(MockBehavior.Strict);
+        response.SetupGet(value => value.Resource)
+            .Returns(new RiderActiveBookingReservation(
+                resourceRiderId,
+                resourceRideId,
+                resourceRequestHash,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow.AddMinutes(5)));
+        response.SetupGet(value => value.ETag)
+            .Throws(new InvalidOperationException("ETag must not be read for a malformed reservation."));
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<RiderActiveBookingReservation>(
+                RiderActiveBookingReservation.DocumentId,
+                It.IsAny<PartitionKey>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosRiderActiveBookingReservationStore(container.Object)
+                .TryMakePermanentAsync("rider-1", "ride-1"));
+
+        Assert.Equal("Cosmos returned a malformed Rider booking reservation resource.", exception.Message);
+        response.VerifyGet(value => value.Resource, Times.Once);
+        response.VerifyGet(value => value.ETag, Times.Never);
+        container.Verify(value => value.ReadItemAsync<RiderActiveBookingReservation>(
+            RiderActiveBookingReservation.DocumentId,
+            It.IsAny<PartitionKey>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+        container.VerifyNoOtherCalls();
+    }
+
 }
