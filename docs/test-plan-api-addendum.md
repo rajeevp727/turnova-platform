@@ -285,3 +285,14 @@ Exact source/test API-only CI [#45620586804](https://github.com/rajeevp727/turno
 | AUTH-API-078 | Malformed JSON body sent to Rider registration, Driver login or refresh | `AuthApiIntegrationTests.MalformedJsonOnPublicAuthEndpointsIsRejectedWithoutCaching` (three theory cases) | Minimal-API body binding returns HTTP 400 and the API response policy retains `Cache-Control: no-store` plus `Pragma: no-cache`; no auth handler/storage work is reached |
 
 Source/test head `5bb43ebcbd0f0ce7db84a99eee8d74f0e6ecba0e` passed exact-head API-only CI [#45625067412](https://github.com/rajeevp727/turnova-platform/actions/runs/45625067412): 1,669/1,669 backend tests, Release build, native non-container publish/verifier and artifact [15028747138](https://github.com/rajeevp727/turnova-platform/actions/runs/45625067412/artifacts/15028747138). Mobile jobs were intentionally skipped under the API-first gate.
+
+
+## Run 180 — malformed JSON on every public authentication route
+
+| Test-plan ID | Scenario | Test | Expected result |
+|---|---|---|---|
+| AUTH-API-079 | Malformed JSON sent to Rider registration, Driver registration, Rider login, Driver login and refresh | `AuthApiIntegrationTests.MalformedJsonOnPublicAuthEndpointsIsRejectedWithoutCaching` (five theory cases) | Minimal-API body binding returns HTTP 400 and the API response policy retains `Cache-Control: no-store` plus `Pragma: no-cache`; no identity handler or storage operation is reached |
+
+The four role-specific routes share `/{role}/register` and `/{role}/login` endpoint handlers. This closes the two missing role/operation combinations left by AUTH-API-078 without changing runtime behavior.
+
+Exact source/test API-only CI [#45629147447](https://github.com/rajeevp727/turnova-platform/actions/runs/45629147447) passed on [`6d1c3935`](https://github.com/rajeevp727/turnova-platform/commit/6d1c39359ba482f825d8037107560fb6210e1615): **1,671/1,671 backend tests (0 failed, 0 skipped)**; .NET 10 Release build (0 warnings/errors); native non-container Linux x64 publish; publish-script syntax; native verifier (11 negative fixtures plus valid fixture); artifact [15029628943](https://github.com/rajeevp727/turnova-platform/actions/runs/45629147447/artifacts/15029628943), 17,040,759 bytes, ZIP SHA-256 `9d552707ef420e9a749553b6f968529bfa33782967d1c0e99a21fbd5d4447a9c`. Mobile-auth/mobile/Android/emulator/iOS/simulator jobs were intentionally skipped under the API-first phase gate.

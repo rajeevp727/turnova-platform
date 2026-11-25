@@ -1,3 +1,20 @@
+## Run 180 — 2026-11-25 — malformed JSON coverage for every public auth route
+
+- **Platform phase:** API `in_progress`; Android/iOS `not_started`. The API-first gate remains mandatory.
+- **Current item:** `AUTH-01` / `AUTH-02` — complete framework-generated malformed-body cache-safety coverage for Rider and Driver registration/login plus refresh.
+- **Active PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; main/base `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`; source/test head [`6d1c3935`](https://github.com/rajeevp727/turnova-platform/commit/6d1c39359ba482f825d8037107560fb6210e1615). Compare: 1364 commits ahead / 0 behind; 274 changed files; no `src/mobile/` paths.
+- **Finding and implementation:** Run179 covered malformed JSON on Rider registration, Driver login and refresh. The shared `/{role}/register` and `/{role}/login` endpoints also serve Driver registration and Rider login, so test-only `AUTH-API-079` adds those two missing route variants. All five cases require HTTP 400 with `Cache-Control: no-store` and `Pragma: no-cache`; no identity handler or persistence work is reached.
+- **Exact source/test CI:** [#45629147447](https://github.com/rajeevp727/turnova-platform/actions/runs/45629147447) passed scope and backend; **1,671/1,671 tests (0 failed, 0 skipped)**; .NET 10 Release build (0 warnings, 0 errors); native non-container Linux x64 publish; publish-script syntax; native verifier (11 negative fixtures plus valid fixture). Artifact [15029628943](https://github.com/rajeevp727/turnova-platform/actions/runs/45629147447/artifacts/15029628943), 17,040,759 bytes; ZIP SHA-256 `9d552707ef420e9a749553b6f968529bfa33782967d1c0e99a21fbd5d4447a9c`.
+- **Phase scope:** mobile-auth/mobile/Android/emulator/iOS/simulator jobs were intentionally skipped by the API-only phase gate. No Android/iOS evidence is inferred. No runtime API behavior, mobile source, secrets, infrastructure or Docker/container build/deployment changed.
+- **Acceptance:** strict **0/19 Verified** (16 In Progress, 3 Blocked: `DISPATCH-01`, `DRIVER-04`, `SUPPORT-01`). No row promoted; AI-01 remains supplemental.
+- **Review gate:** PR #200 remains open/non-draft/mergeable. Three reviews are owner-authored `COMMENTED`; **0 independent approvals**, 0 unresolved threads and no requested reviewer. Independent human maintainer approval remains mandatory. Do not self-approve, bypass protection or merge.
+- **Parked PRs:** #196/#198/#205/#206 remain Draft/parked. #204 is trusted-LAN Android cleartext configuration only, not Android completion evidence. Historical #197/#207 merges without independent approval remain disclosed exceptions, not precedent.
+- **Phase metadata:** PR branch `.github/turnova-phase.json` remains API `in_progress`, Android/iOS `not_started`. Main metadata is stale (`api=complete`, `android=in_progress`) and must not authorize Android work.
+- **External gates:** live Cosmos ETag/partition/transaction/multi-instance/restart/failover/RU; production identity issuer/audience and signing-key custody/rotation; Cosmos credentials, non-container API hosting/TLS, trusted proxy and shared rate limiting; Product-approved dispatch radius/zones/location freshness/negotiation lifetime/FIFO; maps/routing and SignalR/backplane/call/chat/push; private-media storage/scanning/managed identity/consent/retention/deletion; support/escalation and reconciliation policy; Union legal approval; AI provider/model/credentials. Android/iOS physical-device, signing, store and TestFlight evidence remain later phase gates.
+- **Next exact action:** continue API-only auth/authorization/privacy/OpenAPI and Cosmos persistence/contract audits; obtain independent human maintainer review. After a permitted merge, re-read main and run a fresh API phase-exit audit before Android Rider, Android Driver, iOS Rider and iOS Driver in order.
+
+No Docker/container builds or deployments. No live Cosmos, production-provider or device validation is claimed.
+
 ## Run 179 — 2026-11-25 — malformed public-auth payload cache-safety
 
 - **Platform phase:** API `in_progress`; Android/iOS `not_started`. The API-first gate remains mandatory.
@@ -1111,7 +1128,7 @@ Live Cosmos partition/ETag/transaction/multi-instance/restart/RU and failover ev
 - **Strict acceptance:** **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). This is full-evidence accounting, not an implementation percentage.
 - **Production readiness:** not established. Live Cosmos, production identity/hosting, provider, product/legal policy and device evidence remain external gates.
 
-**Last updated:** 2026-11-25 (Run 179)
+**Last updated:** 2026-11-25 (Run 180)
 
 ## Platform phase gate
 
