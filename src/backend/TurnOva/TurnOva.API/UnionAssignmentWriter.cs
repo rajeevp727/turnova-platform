@@ -43,8 +43,10 @@ public static class UnionAssignmentWriter
         {
             try
             {
-                await assignmentContainer.CreateItemAsync(
-                    assignment, partitionKey, cancellationToken: cancellationToken);
+                _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                    () => assignmentContainer.CreateItemAsync(
+                        assignment, partitionKey, cancellationToken: cancellationToken),
+                    cancellationToken);
                 return true;
             }
             catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
@@ -81,11 +83,13 @@ public static class UnionAssignmentWriter
 
         try
         {
-            await assignmentContainer.ReplaceItemAsync(
-                assignment,
-                assignment.DriverId,
-                partitionKey,
-                new ItemRequestOptions { IfMatchEtag = etag },
+            _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => assignmentContainer.ReplaceItemAsync(
+                    assignment,
+                    assignment.DriverId,
+                    partitionKey,
+                    new ItemRequestOptions { IfMatchEtag = etag },
+                    cancellationToken),
                 cancellationToken);
             return true;
         }

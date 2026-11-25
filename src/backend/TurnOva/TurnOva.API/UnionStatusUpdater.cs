@@ -75,11 +75,13 @@ public static class UnionStatusUpdater
 
         try
         {
-            await unionContainer.ReplaceItemAsync(
-                updatedUnion,
-                unionId,
-                new PartitionKey(unionId),
-                new ItemRequestOptions { IfMatchEtag = etag },
+            _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => unionContainer.ReplaceItemAsync(
+                    updatedUnion,
+                    unionId,
+                    new PartitionKey(unionId),
+                    new ItemRequestOptions { IfMatchEtag = etag },
+                    cancellationToken),
                 cancellationToken);
             return new UnionStatusUpdateResult(UnionStatusUpdateOutcome.Updated, updatedUnion);
         }

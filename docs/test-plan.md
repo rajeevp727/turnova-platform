@@ -354,6 +354,10 @@ The Operations Union assignment/transfer path must not overwrite a newer Driver-
 | COSMOS-STORE-014-019 | Duplicate create returns 409 while caller cancellation is signaled | Propagate OperationCanceledException rather than returning conflict | Unit | P1 |
 | COSMOS-STORE-014-020 | Read returns 404 while caller cancellation is signaled | Propagate OperationCanceledException rather than returning false | Unit | P1 |
 | COSMOS-STORE-014-021..023 | Conditional replace returns 404/409/412 while caller cancellation is signaled | Propagate OperationCanceledException rather than returning a conflict result | Theory | P1 |
+| COSMOS-STORE-014-024 | CreateItem provider task fails while caller cancellation is signalled | Propagate caller cancellation instead of provider failure | Unit | P1 |
+| COSMOS-STORE-014-025 | CreateItem provider task fails without caller cancellation | Propagate the exact provider exception unchanged | Unit | P1 |
+| COSMOS-STORE-014-026 | Conditional ReplaceItem provider task fails while caller cancellation is signalled | Propagate caller cancellation; preserve the observed If-Match ETag | Unit | P1 |
+| COSMOS-STORE-014-027 | Conditional ReplaceItem provider task fails without caller cancellation | Propagate the exact provider exception unchanged; preserve the observed If-Match ETag | Unit | P1 |
 
 **Evidence:** `UnionAssignmentWriterTests`; source/test head [`ec68e371382cfd89660f5ba76a970973a6dca3bb`](https://github.com/rajeevp727/turnova-platform/commit/ec68e371382cfd89660f5ba76a970973a6dca3bb); exact-head API-only CI [#45048176506](https://github.com/rajeevp727/turnova-platform/actions/runs/45048176506) passed **1,195/1,195 tests**, .NET 10 Release build, native non-container Linux x64 publish/verifier and artifact [14763848787](https://github.com/rajeevp727/turnova-platform/actions/runs/45048176506/artifacts/14763848787). No live Cosmos or production validation is implied.
 
@@ -381,6 +385,8 @@ The Operations status route must not overwrite a newer Union document with a sta
 | COSMOS-STORE-013-013 | Caller is cancelled after read and before replacement | OperationCanceledException; no replacement | Strict mock | P0 |
 | COSMOS-STORE-013-014 | Read returns 404 while caller cancellation is signaled | OperationCanceledException takes precedence over NotFound | Strict mock | P1 |
 | COSMOS-STORE-013-015..017 | Conditional replace returns 404/409/412 while caller cancellation is signaled | OperationCanceledException takes precedence over NotFound/Conflict | Theory | P1 |
+| COSMOS-STORE-013-018 | Conditional ReplaceItem provider task fails while caller cancellation is signalled | Propagate caller cancellation; preserve the observed If-Match ETag | Unit | P1 |
+| COSMOS-STORE-013-019 | Conditional ReplaceItem provider task fails without caller cancellation | Propagate the exact provider exception unchanged; preserve the observed If-Match ETag | Unit | P1 |
 
 Exact-head API-only CI [#45044729900](https://github.com/rajeevp727/turnova-platform/actions/runs/45044729900) passed **1,177/1,177 backend tests (0 failed, 0 skipped)**, .NET 10 Release build and native non-container Linux x64 publish/verifier (11 negative fixtures plus valid fixture). Artifact [14763336854](https://github.com/rajeevp727/turnova-platform/actions/runs/45044729900/artifacts/14763336854) is 17,008,266 bytes; ZIP SHA-256 `a4d913924591ba0e4b45d62be20df406b0bd6f3c489ad208c8081e9fc12bbe04`. These deterministic mocks do not establish live Cosmos contention or multi-instance/restart readiness.
 

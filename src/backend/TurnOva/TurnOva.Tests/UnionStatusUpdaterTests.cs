@@ -362,6 +362,60 @@ public sealed class UnionStatusUpdaterTests
         container.VerifyNoOtherCalls();
     }
 
+
+    [Fact]
+    public async Task CosmosStatusUpdateProviderFailureTakesPrecedenceOverCancellation()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        SetupRead(container, CreateReadResponse(CreateUnion(), "union-status-etag").Object);
+        using var cancellation = new CancellationTokenSource();
+        container.Setup(value => value.ReplaceItemAsync<DriverUnion>(
+                It.IsAny<DriverUnion>(), UnionId, It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<DriverUnion>>(
+                    new CosmosException("union update unavailable", HttpStatusCode.ServiceUnavailable, 0, "union-status-write", 0));
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            UnionStatusUpdater.TryUpdateStatusAsync(
+                container.Object, new ConcurrentDictionary<string, DriverUnion>(),
+                UnionId, "Suspended", DateTimeOffset.UtcNow, cancellation.Token));
+
+        container.Verify(value => value.ReplaceItemAsync<DriverUnion>(
+            It.IsAny<DriverUnion>(), UnionId, It.IsAny<PartitionKey?>(),
+            It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "union-status-etag"),
+            It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task CosmosStatusUpdateProviderFailurePropagatesUnchangedWithoutCancellation()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        SetupRead(container, CreateReadResponse(CreateUnion(), "union-status-etag").Object);
+        var unavailable = new CosmosException(
+            "union update unavailable", HttpStatusCode.ServiceUnavailable, 0, "union-status-write", 0);
+        container.Setup(value => value.ReplaceItemAsync<DriverUnion>(
+                It.IsAny<DriverUnion>(), UnionId, It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(unavailable);
+
+        var exception = await Assert.ThrowsAsync<CosmosException>(() =>
+            UnionStatusUpdater.TryUpdateStatusAsync(
+                container.Object, new ConcurrentDictionary<string, DriverUnion>(),
+                UnionId, "Suspended", DateTimeOffset.UtcNow, CancellationToken.None));
+
+        Assert.Same(unavailable, exception);
+        container.Verify(value => value.ReplaceItemAsync<DriverUnion>(
+            It.IsAny<DriverUnion>(), UnionId, It.IsAny<PartitionKey?>(),
+            It.Is<ItemRequestOptions?>(options => options != null && options.IfMatchEtag == "union-status-etag"),
+            It.IsAny<CancellationToken>()), Times.Once);
+        container.VerifyNoOtherCalls();
+    }
+
     private static Mock<ItemResponse<DriverUnion>> CreateReadResponse(
         DriverUnion union,
         string? etag,
