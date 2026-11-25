@@ -1,3 +1,22 @@
+## Run 171 — 2026-11-25 — AI-01 provider data-minimization regression
+
+- **Platform phase:** API `in_progress`; Android/iOS `not_started`. API-first sequencing remains mandatory.
+- **Current item:** AI-01 supplemental requirement — provider-boundary privacy evidence.
+- **Active PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; base/main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`; source/test commit [`952d8a6d`](https://github.com/rajeevp727/turnova-platform/commit/952d8a6d3bf23464de3b58cec44d3d660a8577d8). PR remains API-only with 0 `src/mobile/` paths.
+- **Change:** extended `AiAssistanceServiceTests.ProviderReceivesOnlyRedactedTripTokensAndCannotReplaceRoute` with synthetic Rider identity, contact, precise coordinates, licence/KYC, bank-account, payment-token and bearer-token-shaped values. The fake provider asserts none of those values, nor pickup/destination text, appears in its `IntentSummary`; only the fixed pickup/dropoff placeholders and allow-listed generic trip-action words are passed. The locally parsed editable Cab draft still retains pickup/dropoff and requires Rider confirmation. No live provider is configured.
+- **Test-plan ID:** `AI-PRIVACY-001`.
+- **Validation state:** the preceding exact-head API-only CI [#45598764966](https://github.com/rajeevp727/turnova-platform/actions/runs/45598764966) passed 1,660/1,660 backend tests, .NET 10 Release build and native non-container Linux x64 publish/verifier on the previous head `ce50a09d...`. This source/test commit invalidates that exact-head status; fresh CI for the final documentation-bearing head is pending.
+- **Scope:** test-only; no runtime source, route, model, mobile path, secret, provider credential, infrastructure or container build/deployment changed.
+- **Acceptance:** strict **0/19 Verified** (16 In Progress; 3 Blocked: `DISPATCH-01`, `DRIVER-04`, `SUPPORT-01`). AI-01 is supplemental and outside the denominator. No row is promoted.
+- **Review:** PR #200 has three owner-authored `COMMENTED` reviews, 0 independent approvals and 0 unresolved threads; no independent reviewer is requested. Do not self-approve, bypass protection or merge.
+- **Parked PRs:** #196/#198/#205/#206 remain Draft/parked. #204 is trusted-LAN Android cleartext configuration only. Historical #197/#207 merges without independent approval remain disclosed process exceptions, not precedent.
+- **External gates:** live Cosmos ETag/412/partition/transaction/multi-instance/restart/failover/RU; production identity/key custody and provider claim mapping; Cosmos credentials, non-container API hosting/TLS, trusted proxy/shared rate limiting; approved dispatch radius/zones/location freshness/negotiation lifetime/FIFO; maps/routing and SignalR/backplane/call/chat/push; private-media storage/scanning/consent/retention; support/escalation and reconciliation policy; Union legal approval; later Android/iOS physical-device, signing, store and TestFlight evidence. AI provider/model/credentials and live privacy validation remain deliberately unconfigured.
+- **Next exact action:** synchronize the API test addendum, progress, matrix and handoff; verify exact-head API-only CI on the final documentation-bearing commit; continue API-only authorization/privacy/OpenAPI and remaining API contract/idempotency audits. Obtain independent human maintainer approval. After a permitted merge, re-read main and perform a fresh API phase-exit audit before Android Rider, Android Driver, iOS Rider and iOS Driver in order.
+
+No Docker/container builds or deployments. No live Cosmos, production-provider or device validation is claimed.
+
+---
+
 ## Run 170 — 2026-11-25 — Cosmos container TTL ETag fencing and direct-write audit
 
 - **Platform phase:** API `in_progress`; Android/iOS `not_started`. API-first remains mandatory; no Android completion work is authorized.
