@@ -48,8 +48,9 @@ public sealed class CosmosMigrationDatabase(CosmosDatabase database) : ICosmosMi
                 cancellationToken,
                 "Cosmos returned a container handle that does not match the requested name for TTL configuration.",
                 "Cosmos returned an empty container handle for TTL configuration.");
-            var current = await container.ReadContainerAsync(cancellationToken: cancellationToken);
-            cancellationToken.ThrowIfCancellationRequested();
+            var current = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => container.ReadContainerAsync(cancellationToken: cancellationToken),
+                cancellationToken);
             var currentProperties = CosmosReadResponseGuard.ReadResponseResource(
                 current,
                 static containerResponse => containerResponse.Resource,
