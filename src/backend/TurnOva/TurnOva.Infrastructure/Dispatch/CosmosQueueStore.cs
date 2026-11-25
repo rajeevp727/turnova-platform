@@ -61,10 +61,12 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
 
         var audit = CreateAuditEvent(document.ZoneServiceKey, entry.DriverId, QueueAuditEventTypes.Joined);
         cancellationToken.ThrowIfCancellationRequested();
-        var response = await queueContainer.CreateTransactionalBatch(new PartitionKey(document.ZoneServiceKey))
-            .CreateItem(document)
-            .CreateItem(audit)
-            .ExecuteAsync(cancellationToken);
+        var response = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+            () => queueContainer.CreateTransactionalBatch(new PartitionKey(document.ZoneServiceKey))
+                .CreateItem(document)
+                .CreateItem(audit)
+                .ExecuteAsync(cancellationToken),
+            cancellationToken);
         if (response.IsSuccessStatusCode) return;
         cancellationToken.ThrowIfCancellationRequested();
         if (response[0].StatusCode == System.Net.HttpStatusCode.Conflict)
@@ -100,10 +102,12 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
 
             var audit = CreateAuditEvent(key, driverId, QueueAuditEventTypes.Left);
             cancellationToken.ThrowIfCancellationRequested();
-            var response = await queueContainer.CreateTransactionalBatch(new PartitionKey(key))
-                .DeleteItem(driverId, new TransactionalBatchItemRequestOptions { IfMatchEtag = etag })
-                .CreateItem(audit)
-                .ExecuteAsync(cancellationToken);
+            var response = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => queueContainer.CreateTransactionalBatch(new PartitionKey(key))
+                    .DeleteItem(driverId, new TransactionalBatchItemRequestOptions { IfMatchEtag = etag })
+                    .CreateItem(audit)
+                    .ExecuteAsync(cancellationToken),
+                cancellationToken);
             if (response.IsSuccessStatusCode) return true;
             cancellationToken.ThrowIfCancellationRequested();
             if (response[0].StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
@@ -143,10 +147,12 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
             document.Sequence = document.JoinedAt.UtcTicks;
             var audit = CreateAuditEvent(key, driverId, QueueAuditEventTypes.MovedToBack);
             cancellationToken.ThrowIfCancellationRequested();
-            var batch = await queueContainer.CreateTransactionalBatch(new PartitionKey(key))
-                .ReplaceItem(driverId, document, new TransactionalBatchItemRequestOptions { IfMatchEtag = etag })
-                .CreateItem(audit)
-                .ExecuteAsync(cancellationToken);
+            var batch = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => queueContainer.CreateTransactionalBatch(new PartitionKey(key))
+                    .ReplaceItem(driverId, document, new TransactionalBatchItemRequestOptions { IfMatchEtag = etag })
+                    .CreateItem(audit)
+                    .ExecuteAsync(cancellationToken),
+                cancellationToken);
             if (batch.IsSuccessStatusCode) return true;
             cancellationToken.ThrowIfCancellationRequested();
             if (batch[0].StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
@@ -192,10 +198,12 @@ public sealed class CosmosQueueStore(Container queueContainer) : IQueueStore
             document.LastRotationOfferId = offerId;
             var audit = CreateAuditEvent(key, driverId, QueueAuditEventTypes.RotatedToBack, offerId);
             cancellationToken.ThrowIfCancellationRequested();
-            var batch = await queueContainer.CreateTransactionalBatch(new PartitionKey(key))
-                .ReplaceItem(driverId, document, new TransactionalBatchItemRequestOptions { IfMatchEtag = etag })
-                .CreateItem(audit)
-                .ExecuteAsync(cancellationToken);
+            var batch = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => queueContainer.CreateTransactionalBatch(new PartitionKey(key))
+                    .ReplaceItem(driverId, document, new TransactionalBatchItemRequestOptions { IfMatchEtag = etag })
+                    .CreateItem(audit)
+                    .ExecuteAsync(cancellationToken),
+                cancellationToken);
             if (batch.IsSuccessStatusCode) return true;
             cancellationToken.ThrowIfCancellationRequested();
             if (batch[0].StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.PreconditionFailed)
