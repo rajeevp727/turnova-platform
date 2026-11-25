@@ -264,4 +264,40 @@ public sealed class CosmosReservationResourceContractTests
         container.VerifyNoOtherCalls();
     }
 
+    [Theory]
+    [InlineData("different-driver", "ride-1", "promote")]
+    [InlineData("driver-1", " ", "promote")]
+    [InlineData("different-driver", "ride-1", "expiry")]
+    [InlineData("driver-1", " ", "expiry")]
+    public async Task DriverPromotionAndExpiryRejectMalformedResourceBeforeStartingBatch(
+        string resourceDriverId,
+        string resourceRideId,
+        string operation)
+    {
+        var response = new Mock<ItemResponse<DriverRideReservation>>();
+        response.SetupGet(value => value.Resource)
+            .Returns(new DriverRideReservation(
+                resourceDriverId, resourceRideId, DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow.AddMinutes(5)));
+        var container = new Mock<Container>(MockBehavior.Strict);
+        container.Setup(value => value.ReadItemAsync<DriverRideReservation>(
+                "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(response.Object);
+        var store = new CosmosDriverRideReservationStore(container.Object);
+
+        var exception = operation == "promote"
+            ? await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                store.TryMakePermanentAsync("driver-1", "ride-1"))
+            : await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                store.TrySetExpiryAsync("driver-1", "ride-1", DateTimeOffset.UtcNow.AddMinutes(10)));
+
+        Assert.Equal("Cosmos returned a malformed driver reservation resource.", exception.Message);
+        container.Verify(value => value.ReadItemAsync<DriverRideReservation>(
+            "driver-1", It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Never);
+        container.VerifyNoOtherCalls();
+    }
+
 }
