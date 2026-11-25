@@ -85,3 +85,19 @@ These deterministic tests supplement the Cosmos persistence/query guard evidence
 | COSMOS-BOOTSTRAP-042 | `CreateContainerIfNotExistsAsync` successfully commits while caller cancellation arrives before the successful response is consumed | `CosmosIdentityContainerBootstrapTests.RegisterStopsBeforeIdentityBatchWhenContainerBootstrapCommitsAfterCancellation` | The committed bootstrap is not retroactively reported as a provider failure; cancellation is surfaced before response hydration/registration batch work, and no identity transactional batch begins |
 
 This is deterministic Cosmos SDK-mock evidence. It does not establish live Cosmos container creation, partitioning, ETag, multi-instance or restart behavior.
+
+
+## Run 164 — guarded Cosmos reads for SignalR ride tracking
+
+These deterministic tests cover the Cosmos-backed SignalR connection path. They do not establish live Cosmos, WebSocket delivery, multi-instance backplane or device reconnect behavior.
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| SIGNALR-COSMOS-001 | Authenticated owning Rider connects to a Cosmos-backed ride group | `RideTrackingHubTests.OnConnectedAsyncUsesGuardedCosmosReadAndAddsOnlyTheOwningRider` | Uses the ride ID as both item ID and partition key, validates the returned RideId, forwards `ConnectionAborted`, and adds only the owning Rider |
+| SIGNALR-COSMOS-002 | Cosmos point read returns 404 | `RideTrackingHubTests.OnConnectedAsyncAbortsWhenCosmosRideDoesNotExist` | Connection is aborted and no group membership is added |
+| SIGNALR-COSMOS-003 | Cosmos returns a null/identity-mismatched ride resource | `RideTrackingHubTests.OnConnectedAsyncAbortsWhenCosmosReturnsMismatchedRideIdentity` | Invalid aggregate is rejected and no group membership is added |
+| SIGNALR-COSMOS-004 | Connection aborts after Cosmos returns a successful response | `RideTrackingHubTests.OnConnectedAsyncStopsBeforeResourceHydrationWhenConnectionAbortsAfterCosmosRead` | Cancellation is surfaced before lazy Resource hydration and before group membership |
+
+**Exact source/test evidence:** [PR #200 head `5dbfb67badca92d6a80b0bb9e287ebf675695f65`](https://github.com/rajeevp727/turnova-platform/commit/5dbfb67badca92d6a80b0bb9e287ebf675695f65) passed API-only CI [#45565641809](https://github.com/rajeevp727/turnova-platform/actions/runs/45565641809): **1,631/1,631 backend tests (0 failed, 0 skipped)**, .NET 10 Release build (0 warnings/errors), native non-container Linux x64 API publish, publish-script syntax and verifier (11 negative fixtures plus valid fixture). Artifact [14999882815](https://github.com/rajeevp727/turnova-platform/actions/runs/45565641809/artifacts/14999882815), 17,040,040 bytes; ZIP SHA-256 `0fa4962fcf2482d720da17fa7a26465dd4ba0762b4948045252c6ae1969c9528`.
+
+The API/Infrastructure scan covered 35 C# source files and found no raw Cosmos SDK point-read/page-read/Resource/ETag access outside the shared guard after this change. No acceptance row is promoted; `REALTIME-01` remains In Progress. SDK mocks do not prove live Cosmos or SignalR behavior.
