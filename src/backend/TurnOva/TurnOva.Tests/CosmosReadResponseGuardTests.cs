@@ -47,6 +47,51 @@ public sealed class CosmosReadResponseGuardTests
     }
 
     [Fact]
+    [Fact]
+    public async Task AwaitCommittedWriteWithCancellationPrecedenceReturnsSuccessfulCommittedResultAfterCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+
+        var result = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+            () =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult("committed-result");
+            },
+            cancellation.Token);
+
+        Assert.Equal("committed-result", result);
+    }
+
+    [Fact]
+    public async Task AwaitCommittedWriteWithCancellationPrecedencePrefersCancellationOverProviderFailure()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var providerFailure = new InvalidOperationException("committed write provider failed");
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () =>
+                {
+                    cancellation.Cancel();
+                    return Task.FromException<string>(providerFailure);
+                },
+                cancellation.Token));
+    }
+
+    [Fact]
+    public async Task AwaitCommittedWriteWithCancellationPrecedencePropagatesProviderFailureWhenNotCancelled()
+    {
+        var providerFailure = new InvalidOperationException("committed write provider failed");
+
+        var actual = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => Task.FromException<string>(providerFailure),
+                CancellationToken.None));
+
+        Assert.Same(providerFailure, actual);
+    }
+
     public void ReadResponseEtagReturnsHydratedValue()
     {
         var response = new Mock<ItemResponse<DriverUnion>>(MockBehavior.Strict);
