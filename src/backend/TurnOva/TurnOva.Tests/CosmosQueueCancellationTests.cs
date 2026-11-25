@@ -101,6 +101,40 @@ public sealed class CosmosQueueCancellationTests
     }
 
     [Fact]
+    public async Task QueueJoinProviderFailureTakesPrecedenceOverCancellation()
+    {
+        var container = new Mock<Container>(MockBehavior.Strict);
+        var batch = new Mock<TransactionalBatch>(MockBehavior.Strict);
+        using var cancellation = new CancellationTokenSource();
+        var entry = new DriverQueueEntry("driver-1", "zone-a", "Cab", DateTimeOffset.UtcNow, 1, true);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<CosmosQueueStore.QueueEntryDocument>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.CreateItem(
+                It.IsAny<QueueAuditEvent>(),
+                It.IsAny<TransactionalBatchItemRequestOptions>()))
+            .Returns(batch.Object);
+        batch.Setup(value => value.ExecuteAsync(cancellation.Token))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<TransactionalBatchResponse>(
+                    new InvalidOperationException("queue join batch failed"));
+            });
+        container.Setup(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()))
+            .Returns(batch.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new CosmosQueueStore(container.Object).AddAsync(entry, cancellation.Token));
+
+        container.Verify(value => value.CreateTransactionalBatch(It.IsAny<PartitionKey>()), Times.Once);
+        batch.Verify(value => value.ExecuteAsync(cancellation.Token), Times.Once);
+        container.VerifyNoOtherCalls();
+        batch.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task QueueJoinRemainsSuccessfulWhenCancellationArrivesAfterAtomicCommit()
     {
         var container = new Mock<Container>(MockBehavior.Strict);
