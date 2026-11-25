@@ -224,3 +224,8 @@ The API member-list guard now requires the claimed Union to exist, be Active and
 ## Run 173 — UnionManager Cab-scope compile correction
 
 The first Run172 exact-head workflow [#45601521567](https://github.com/rajeevp727/turnova-platform/actions/runs/45601521567) failed in the .NET Release build because `StringComparison` was passed to `IReadOnlyList<string>.Contains`. No backend tests ran in that failed job. The API guard now uses `Contains("cab", StringComparer.OrdinalIgnoreCase)` in commit [`ba03e4ec482c9f6ba919504fe9294acb9897ee0d`](https://github.com/rajeevp727/turnova-platform/commit/ba03e4ec482c9f6ba919504fe9294acb9897ee0d). Fresh exact-head CI is required; the previous passing Run170 workflow is not reused as evidence for the corrected head.
+
+
+## Run 174 — deterministic regression-fixture corrections
+
+Exact-head API-only CI [#45602030019](https://github.com/rajeevp727/turnova-platform/actions/runs/45602030019) completed with Release build success and **1,659/1,661 tests passing, 2 failing**; publish did not run after the test gate. The AI-01 trip-intent test still expected the old drop-off `HITEC City` after its fixture changed to `Secret Clinic`; assertion corrected in [`be4da1bc207440848ce787cb3e0fc135800e01fd`](https://github.com/rajeevp727/turnova-platform/commit/be4da1bc207440848ce787cb3e0fc135800e01fd). The UnionManager scope test called `SeedBookableDriver` before creating the Driver profiles; it now initializes both test clients before seeding in [`2f99d483ab68f0c4e8d4fd13b600a0613671dab6`](https://github.com/rajeevp727/turnova-platform/commit/2f99d483ab68f0c4e8d4fd13b600a0613671dab6). Neither correction changes production behavior. Fresh exact-head CI is required.
