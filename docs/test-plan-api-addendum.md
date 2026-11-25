@@ -202,6 +202,8 @@ A full production-source callsite inventory covered all 63 C# files under `TurnO
 
 Intermediate test-only CI failures [#45597246954](https://github.com/rajeevp727/turnova-platform/actions/runs/45597246954) and [#45598123283](https://github.com/rajeevp727/turnova-platform/actions/runs/45598123283) were corrected by narrowing test assertions/verification and supplying the observed ETag in the existing TTL cancellation fixtures. The final exact-head CI above is green. Mobile-auth/mobile/Android/emulator/iOS/simulator jobs were intentionally skipped under the API-first phase gate.
 
+- **Documentation-bearing head CI:** [#45629857059](https://github.com/rajeevp727/turnova-platform/actions/runs/45629857059) passed on `ebefbf83ec4fea001507f4df6b90530ce0ce491e`: 1,671/1,671 backend tests (0 failed, 0 skipped), .NET 10 Release build (0 warnings/errors), native non-container Linux x64 publish, publish-script syntax and verifier (11 negative fixtures plus valid fixture). Artifact [15030680918](https://github.com/rajeevp727/turnova-platform/actions/runs/45629857059/artifacts/15030680918), 17,040,799 bytes; ZIP SHA-256 `27361e1072e73467b75f07b847eb455a592e6c7611d5631c96a9f0da1fd63342`.
+
 This is deterministic SDK-mock and native-publish evidence only. It does not establish live Cosmos 412 contention, partition/transaction behavior, multi-instance/restart/failover/RU, or production readiness. No acceptance row is promoted.
 
 
