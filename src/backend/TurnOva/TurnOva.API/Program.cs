@@ -431,7 +431,13 @@ async Task RecordWorkActivityAsync(string driverId, string rideId, string activi
         workActivities.TryAdd($"{driverId}|{activityId}", activity);
         return;
     }
-    try { await workActivityContainer.CreateItemAsync(activity, new PartitionKey(driverId), cancellationToken: ct); }
+    try
+    {
+        _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+            () => workActivityContainer.CreateItemAsync(
+                activity, new PartitionKey(driverId), cancellationToken: ct),
+            ct);
+    }
     catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict) { }
 }
 
@@ -545,7 +551,10 @@ async Task<DriverMonthlyPayslip> SavePayslipIfAbsentAsync(DriverMonthlyPayslip p
 
     try
     {
-        await payslipContainer.CreateItemAsync(payslip, new PartitionKey(payslip.DriverId), cancellationToken: ct);
+        _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+            () => payslipContainer.CreateItemAsync(
+                payslip, new PartitionKey(payslip.DriverId), cancellationToken: ct),
+            ct);
         return payslip;
     }
     catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
@@ -764,7 +773,10 @@ async Task SaveUnionAuditAsync(DriverUnionAuditEvent audit, CancellationToken ct
 
         try
         {
-            await unionAuditContainer.CreateItemAsync(audit, new PartitionKey(audit.DriverId), cancellationToken: ct);
+            _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => unionAuditContainer.CreateItemAsync(
+                    audit, new PartitionKey(audit.DriverId), cancellationToken: ct),
+                ct);
             RecordUnionAuditOutcome(activity, audit.EventType, "success");
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
@@ -955,9 +967,11 @@ async Task TryCompleteUnionAssignmentAuditSnapshotAsync(
 
         try
         {
-            await unionAssignmentContainer!.ReplaceItemAsync(
-                Complete(current), current.id, new PartitionKey(current.DriverId),
-                new ItemRequestOptions { IfMatchEtag = etag }, ct);
+            _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => unionAssignmentContainer!.ReplaceItemAsync(
+                    Complete(current), current.id, new PartitionKey(current.DriverId),
+                    new ItemRequestOptions { IfMatchEtag = etag }, ct),
+                ct);
             return;
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
@@ -1165,7 +1179,10 @@ async Task<bool> TryCreateDriverProfileAsync(DriverOnboardingProfile profile, Ca
 
     try
     {
-        await driverContainer.CreateItemAsync(profile, new PartitionKey(profile.DriverId), cancellationToken: ct);
+        _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+            () => driverContainer.CreateItemAsync(
+                profile, new PartitionKey(profile.DriverId), cancellationToken: ct),
+            ct);
         return true;
     }
     catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
@@ -1226,9 +1243,11 @@ async Task<bool> TryUpdateDriverProfileAsync(
 
         try
         {
-            await driverContainer!.ReplaceItemAsync(
-                updated, driverId, new PartitionKey(driverId),
-                new ItemRequestOptions { IfMatchEtag = etag }, ct);
+            _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => driverContainer!.ReplaceItemAsync(
+                    updated, driverId, new PartitionKey(driverId),
+                    new ItemRequestOptions { IfMatchEtag = etag }, ct),
+                ct);
             return true;
         }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.PreconditionFailed)
@@ -1267,7 +1286,10 @@ async Task<bool> TryCreateRideAsync(DemoRide ride, CancellationToken ct)
         {
             try
             {
-                await rideContainer.CreateItemAsync(ride, new PartitionKey(ride.RideId), cancellationToken: ct);
+                _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                    () => rideContainer.CreateItemAsync(
+                        ride, new PartitionKey(ride.RideId), cancellationToken: ct),
+                    ct);
                 created = true;
             }
             catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
@@ -3752,7 +3774,10 @@ app.MapPost("/api/v1/rider/bookings", async (
         {
             try
             {
-                await idempotencyContainer.CreateItemAsync(idempotencyRecord, new PartitionKey(riderId), cancellationToken: ct);
+                _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                    () => idempotencyContainer.CreateItemAsync(
+                        idempotencyRecord, new PartitionKey(riderId), cancellationToken: ct),
+                    ct);
             }
             catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
             {
@@ -4020,7 +4045,13 @@ app.MapPost("/api/v1/rides/request", async (HttpContext context, ClaimsPrincipal
     }
     else
     {
-        try { await idempotencyContainer.CreateItemAsync(reservation, new PartitionKey(riderId), cancellationToken: ct); }
+        try
+        {
+            _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                () => idempotencyContainer.CreateItemAsync(
+                    reservation, new PartitionKey(riderId), cancellationToken: ct),
+                ct);
+        }
         catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
         {
             var existing = await CosmosCreateConflictRead.ReadAfterCreateConflictAsync<RideIdempotencyRecord>(
@@ -5191,9 +5222,11 @@ async Task<bool> TryReplaceRideAsync(DemoRide current, DemoRide updated, Cancell
                 }
                 else
                 {
-                    await rideContainer!.ReplaceItemAsync(
-                        updated, current.RideId, new PartitionKey(current.RideId),
-                        new ItemRequestOptions { IfMatchEtag = etag }, ct);
+                    _ = await CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync(
+                        () => rideContainer!.ReplaceItemAsync(
+                            updated, current.RideId, new PartitionKey(current.RideId),
+                            new ItemRequestOptions { IfMatchEtag = etag }, ct),
+                        ct);
                     replaced = true;
                 }
             }
