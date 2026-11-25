@@ -119,6 +119,20 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task LogoutRequiresConfiguredCosmosStorage()
+    {
+        using var factory = new AuthApiFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", CreateToken());
+
+        using var response = await client.PostAsync("/api/v1/auth/logout", null);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        AssertNoStoreHeaders(response);
+    }
+
+    [Fact]
     public async Task MeRejectsAnonymousRequest()
     {
         using var factory = new AuthApiFactory();
