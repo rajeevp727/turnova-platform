@@ -1,3 +1,25 @@
+## Run 175 — 2026-11-25 — AI-01 destination fixture correction
+
+- **Platform phase:** API `in_progress`; Android/iOS `not_started`. API-first sequencing remains mandatory.
+- **Current item:** `DRIVER-01` / `PLATFORM-01` — complete the AI-01 provider-redaction regression and Cab-only UnionManager member-list regression.
+- **Active PR:** [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; base/main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`. API-only; no `src/mobile/` paths.
+- **Run174 exact-head CI:** [#45602671349](https://github.com/rajeevp727/turnova-platform/actions/runs/45602671349) passed Release compilation and **1,659/1,661 backend tests**; 2 AI-01 test assertions failed, 0 skipped. The new UnionManager scope regression passed. Native publish was skipped after the test gate.
+- **Root cause:** the first assertion correction used a global string replacement: it changed the existing unavailable-provider fallback test's expected destination from `HITEC City` to `Secret Clinic`, while leaving the provider-enabled test expecting `HITEC City`. The two method-specific assertions are now correct: fallback remains `HITEC City`; provider-enabled synthetic input returns local draft drop-off `Secret Clinic`. Fix commit [`0130aed6`](https://github.com/rajeevp727/turnova-platform/commit/0130aed62420fafb1ca5288a66fec9beab9c26e2). No production AI code changed.
+- **Union scope result:** the previous missing-profile fixture setup is corrected; `UNION-SCOPE-002` passed in #456026, confirming only the active Cab-serving Union member is returned when a manager claims both Cab and non-Cab Unions.
+- **Production guard:** the member list still requires signed `unionId` scope, active assignment, active Union, non-null Cab-serving service-class list and Cab driver profile. Release compilation passed after the comparer-overload correction.
+- **Test-plan IDs:** `AI-PRIVACY-001` and `UNION-SCOPE-002`; both remain supplemental engineering evidence, not acceptance-row promotions.
+- **Fresh CI:** exact-head API-only CI for the corrected AI assertions and final documentation-bearing Run175 head is pending. Run #45602671349 is recorded as 1,659/1,661, not green. Earlier #45601521567 failed during compilation before tests.
+- **Scope:** test-only assertion correction and docs; no additional production behavior, mobile source, secrets, provider credentials, infrastructure or container work.
+- **Acceptance:** strict **0/19 Verified** (16 In Progress; 3 Blocked: `DISPATCH-01`, `DRIVER-04`, `SUPPORT-01`). No row is promoted; AI-01 remains supplemental and outside the denominator.
+- **Review:** PR #200 has three owner-authored `COMMENTED` reviews, 0 independent approvals and 0 unresolved threads. Independent human maintainer approval remains required; no self-approval, bypass or merge.
+- **Parked PRs:** #196/#198/#205/#206 remain Draft/parked. #204 is trusted-LAN Android cleartext configuration only. Historical #197/#207 merges without independent approval remain disclosed exceptions, not precedent.
+- **External gates:** live Cosmos ETag/412/partition/transaction/multi-instance/restart/failover/RU; production identity/key custody and UnionManager claim mapping; Cosmos credentials, non-container API hosting/TLS, trusted proxy/shared rate limiting; approved dispatch radius/zones/location freshness/negotiation lifetime/FIFO; maps/routing and SignalR/backplane/call/chat/push; private-media storage/scanning/consent/retention; support/escalation and reconciliation policy; Union legal approval; AI provider/model/credentials; later Android/iOS physical-device, signing, store and TestFlight evidence.
+- **Next exact action:** verify exact-head API-only CI on the final Run175 documentation-bearing head: Release build, all backend tests (expected 1,661), native non-container Linux x64 publish, script syntax, verifier and artifact. Continue API-only auth/authorization/privacy/OpenAPI and remaining contract/idempotency audits; obtain independent human maintainer approval. After a permitted merge, re-read main and run a fresh API phase-exit audit before Android Rider, Android Driver, iOS Rider and iOS Driver in order.
+
+No Docker/container builds or deployments. No live Cosmos, production-provider or device validation is claimed.
+
+---
+
 ## Run 174 — 2026-11-25 — API regression-fixture corrections
 
 - **Platform phase:** API `in_progress`; Android/iOS `not_started`. No Android completion work is authorized.
