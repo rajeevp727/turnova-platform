@@ -31,7 +31,7 @@ public sealed class InMemoryQueueStore : IQueueStore
     public Task AddAsync(DriverQueueEntry entry, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        ArgumentNullException.ThrowIfNull(entry);
+        DriverQueueEntry.ValidateForJoin(entry);
         var key = Key(entry.ZoneId, entry.ServiceClass);
         var queue = _queues.GetOrAdd(key, _ => new FifoQueue());
         lock (queue)
