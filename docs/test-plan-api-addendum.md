@@ -75,3 +75,13 @@ These deterministic tests supplement the Cosmos persistence/query guard evidence
 | COSMOS-READ-048 | Enumerator disposal fails without caller cancellation | `CosmosReadResponseGuardTests.ReadPageItemsPreservesEnumeratorDisposeFailureWhenNotCancelled` | The original disposal exception instance is propagated |
 
 **Exact source/test evidence:** [PR #200 source/test head `b7d9c08ea4246187d5aafe54113d0ec057320f4e`](https://github.com/rajeevp727/turnova-platform/commit/b7d9c08ea4246187d5aafe54113d0ec057320f4e) passed API-only CI [#45551885376](https://github.com/rajeevp727/turnova-platform/actions/runs/45551885376): 1,626/1,626 tests, Release build with 0 warnings/errors, native non-container Linux x64 publish and verifier (11 negative fixtures plus valid fixture). Artifact [14994491824](https://github.com/rajeevp727/turnova-platform/actions/runs/45551885376/artifacts/14994491824), 17,039,927 bytes; ZIP SHA-256 `761740b4a6eb4f394b2aff9c956bf15cfbfad132f67d1d2ede21bea8beca6d14`. This is a test-only increment; no acceptance row is promoted.
+
+
+
+## Run 163 — identity-container bootstrap commit/cancellation boundary
+
+| Test-plan ID | Scenario | Automated evidence | Expected result |
+|---|---|---|---|
+| COSMOS-BOOTSTRAP-042 | `CreateContainerIfNotExistsAsync` successfully commits while caller cancellation arrives before the successful response is consumed | `CosmosIdentityContainerBootstrapTests.RegisterStopsBeforeIdentityBatchWhenContainerBootstrapCommitsAfterCancellation` | The committed bootstrap is not retroactively reported as a provider failure; cancellation is surfaced before response hydration/registration batch work, and no identity transactional batch begins |
+
+This is deterministic Cosmos SDK-mock evidence. It does not establish live Cosmos container creation, partitioning, ETag, multi-instance or restart behavior.
