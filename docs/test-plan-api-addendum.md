@@ -1,5 +1,13 @@
 # API Test Plan Addendum — 2026-11-25 (Run 159)
 
+## Queue eligibility ordering metadata — Run 190
+
+- **COSMOS-STORE-036** — `CosmosQueueResourceContractTests.QueueEligibilityRejectsMissingJoinTimestampOrInvalidSequence` covers a default `JoinedAt`, zero `Sequence` and negative `Sequence`. A malformed persisted record must fail before it enters the internal FIFO snapshot.
+- Runtime guard: `CosmosQueueStore.RequireEligibleQueryItem` now requires a non-default `JoinedAt` and positive `Sequence`, consistent with the Cosmos writer's `JoinedAt.UtcTicks` sequence contract.
+- Exact source/test head `6334923d1bb95d5137871a79c2626247c1f13b03` passed API-only CI [#45676966031](https://github.com/rajeevp727/turnova-platform/actions/runs/45676966031): **1,707/1,707 tests (0 failed, 0 skipped)**, .NET 10 Release build (0 warnings/errors), native non-container Linux x64 publish, publish-script syntax and verifier (11 negative fixtures plus valid fixture). Artifact [15052072326](https://github.com/rajeevp727/turnova-platform/actions/runs/45676966031/artifacts/15052072326), 17,040,914 bytes; ZIP SHA-256 `38676d5c9979decf57d80488455288a03d7f128d219dfc182a191a65eefe06b8`.
+- This deterministic Cosmos mock coverage does not establish live Cosmos ETag, transaction, multi-instance, restart or failover behavior.
+
+
 ## Queue audit persisted-event contract validation — Run 189
 
 - **COSMOS-STORE-034** — `CosmosQueueResourceContractTests.QueueAuditReadAcceptsEverySupportedEventShape` verifies the five persisted audit event types and their valid metadata shapes. The companion seven-case theory rejects an unknown event type, offer metadata on a plain mutation, a rotation without an offer ID, dispatch-exception records missing required trace/reason fields, and incompatible mixed metadata.
