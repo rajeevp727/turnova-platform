@@ -290,6 +290,27 @@ public sealed class AuthApiIntegrationTests
     }
 
     [Fact]
+    public async Task CorsPreflightForPublicAuthRouteReceivesNoStoreHeaders()
+    {
+        using var factory = new AuthApiFactory(new Dictionary<string, string?>
+        {
+            ["Cors:AllowedOrigins:0"] = "https://client.example"
+        });
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Options, "/api/v1/auth/rider/login");
+        request.Headers.Add("Origin", "https://client.example");
+        request.Headers.Add("Access-Control-Request-Method", "POST");
+        request.Headers.Add("Access-Control-Request-Headers", "content-type");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        AssertNoStoreHeaders(response);
+        Assert.Contains("https://client.example", response.Headers.GetValues("Access-Control-Allow-Origin"));
+        Assert.Contains("POST", response.Headers.GetValues("Access-Control-Allow-Methods"));
+    }
+
+    [Fact]
     public async Task OpenApiDocumentDescribesCoreRoutesAndAccurateSecuritySchemes()
     {
         using var factory = new AuthApiFactory();
