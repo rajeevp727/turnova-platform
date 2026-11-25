@@ -47,7 +47,6 @@ public sealed class CosmosReadResponseGuardTests
     }
 
     [Fact]
-    [Fact]
     public async Task AwaitCommittedWriteWithCancellationPrecedenceReturnsSuccessfulCommittedResultAfterCancellation()
     {
         using var cancellation = new CancellationTokenSource();
@@ -92,6 +91,7 @@ public sealed class CosmosReadResponseGuardTests
         Assert.Same(providerFailure, actual);
     }
 
+    [Fact]
     public void ReadResponseEtagReturnsHydratedValue()
     {
         var response = new Mock<ItemResponse<DriverUnion>>(MockBehavior.Strict);
