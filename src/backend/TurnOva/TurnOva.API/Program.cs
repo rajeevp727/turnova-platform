@@ -2961,7 +2961,7 @@ app.MapGet("/api/v1/driver/payslips/{year:int}/{month:int}.pdf", async (
     // Monthly work statements contain private Driver/Union information. Prevent browsers,
     // shared proxies and intermediary caches from retaining either generated or stored PDFs.
     context.Response.Headers.CacheControl = "private, no-store";
-    context.Response.Headers.Pragma = "no-cache";
+    context.Response.Headers["Pragma"] = "no-cache";
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
 
     var driverId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
