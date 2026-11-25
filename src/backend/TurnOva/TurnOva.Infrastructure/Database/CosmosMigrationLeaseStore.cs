@@ -47,8 +47,10 @@ public sealed class CosmosMigrationLeaseStore(Container locks) : ICosmosMigratio
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            var response = await locks.ReadItemAsync<CosmosMigrationLeaseDocument>(
-                LeaseId, new PartitionKey(LeaseId), cancellationToken: cancellationToken);
+            var response = await CosmosReadResponseGuard.AwaitWithCancellationPrecedenceAsync(
+                () => locks.ReadItemAsync<CosmosMigrationLeaseDocument>(
+                    LeaseId, new PartitionKey(LeaseId), cancellationToken: cancellationToken),
+                cancellationToken);
             return ReadLeaseResponse(response, expectedOwner: null, cancellationToken);
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
