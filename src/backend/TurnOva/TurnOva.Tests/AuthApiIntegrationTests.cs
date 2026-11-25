@@ -240,6 +240,7 @@ public sealed class AuthApiIntegrationTests
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", CreateToken(includeSubject: false));
         using var response = await client.GetAsync("/api/v1/auth/me");
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        AssertNoStoreHeaders(response);
     }
 
     [Fact]
@@ -250,6 +251,7 @@ public sealed class AuthApiIntegrationTests
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", CreateToken(includeNameId: true));
         using var response = await client.GetAsync("/api/v1/auth/me");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        AssertNoStoreHeaders(response);
     }
 
     [Fact]
