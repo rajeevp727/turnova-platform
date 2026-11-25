@@ -1230,4 +1230,44 @@ public sealed class CosmosMigrationRunnerTests
             await released.Task.WaitAsync(cancellationToken);
         }
     }
+
+    [Fact]
+    public async Task HistoryReadProviderFailureTakesPrecedenceOverCancellationAndReleasesLease()
+    {
+        var (client, historyContainer) = CreateCosmosClient();
+        using var cancellation = new CancellationTokenSource();
+        var providerFailure = new CosmosException(
+            "migration history read unavailable", HttpStatusCode.ServiceUnavailable, 0, "migration-history-test", 0);
+        historyContainer.Setup(container => container.ReadItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
+                It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<CosmosMigrationRunner.MigrationHistoryDocument>>(providerFailure);
+            });
+        var leaseStore = new LeaseLostStore();
+        var migration = new CountingMigration();
+        var runner = new CosmosMigrationRunner(
+            client,
+            new CosmosDbOptions { DatabaseName = "TurnOvaMigrationTest" },
+            [migration],
+            CreateCoordinator(leaseStore, new ControlledDelay()),
+            NullLogger<CosmosMigrationRunner>.Instance);
+
+        var actual = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            runner.RunAsync(cancellation.Token).WaitAsync(TimeSpan.FromSeconds(5)));
+
+        Assert.Equal(cancellation.Token, actual.CancellationToken);
+        Assert.Equal(0, migration.CallCount);
+        Assert.NotNull(leaseStore.ReleasedLease);
+        historyContainer.Verify(container => container.ReadItemAsync<CosmosMigrationRunner.MigrationHistoryDocument>(
+            It.IsAny<string>(), It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        historyContainer.Verify(container => container.CreateItemAsync(
+            It.IsAny<CosmosMigrationRunner.MigrationHistoryDocument>(),
+            It.IsAny<PartitionKey?>(), It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
 }
