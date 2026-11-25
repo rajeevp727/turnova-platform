@@ -1,3 +1,15 @@
+## Run 155 — 2026-11-25 — Cosmos bootstrap write cancellation precedence
+
+- **Platform phase:** API `in_progress`; Android/iOS `not_started`. PR [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; base/main `e5366ad58a2f3ff1d39c9c0641fbb74a1d348860`; current source/test head `498709cb8206ee642240c1f1d3eb3b48d52148a7`.
+- **Audit finding:** database and container bootstrap create operations were directly awaited. If a Cosmos provider task failed while caller cancellation was signalled, the provider exception could escape instead of cancellation. The existing read helper could not be reused because successful create operations are committed writes and must not be retroactively converted to cancellation.
+- **Implementation:** added `CosmosReadResponseGuard.AwaitCommittedWriteWithCancellationPrecedenceAsync`. It checks pre-cancellation, lets successful committed writes remain authoritative, and gives caller cancellation precedence only when the provider task fails. Applied it to `CosmosMigrationDatabase.CreateContainerIfNotExistsAsync`, `CosmosMigrationRunner.CreateDatabaseIfNotExistsAsync`, and the Runner's MigrationHistory/Lock `CreateContainerIfNotExistsAsync` bootstrap calls.
+- **Automated evidence:** eight deterministic Cosmos SDK-mock tests cover provider failure with and without caller cancellation for the support container, migration database, MigrationHistory container and Lock container. Tests assert no downstream response hydration, next-container creation or lease acquisition after failure.
+- **Exact-head API-only CI:** [#45530080676](https://github.com/rajeevp727/turnova-platform/actions/runs/45530080676) passed **1,565/1,565 backend tests (0 failed, 0 skipped)**; .NET 10 Release build (0 warnings/errors); native non-container Linux x64 API publish; publish-script syntax; native publish verifier (11 negative fixtures plus valid fixture). Published API size: 44,068,856 bytes. Artifact [14984886050](https://github.com/rajeevp727/turnova-platform/actions/runs/45530080676/artifacts/14984886050), 17,033,943 bytes; ZIP SHA-256 `ebce4984076a7856dc56aaea5bc023028864ea72c5a05f770e5aac414106349e`.
+- **Scope/acceptance:** backend-only change; no mobile, Docker/container, secrets, deployment or production changes. Strict acceptance remains **0/19 Verified** (16 In Progress, 3 Blocked: DISPATCH-01, DRIVER-04, SUPPORT-01). No acceptance row is promoted. Deterministic SDK mocks do not establish live Cosmos behavior.
+- **PR/review:** PR #200 remains the sole ready/active API PR and is mergeable. Three owner-authored COMMENTED reviews, zero independent approvals and zero unresolved threads. PRs #196/#198/#205/#206 remain Draft/parked; PR #204 is trusted-LAN cleartext configuration only. Historical PR #197 and #207 merges without independent approval remain process exceptions, not precedent.
+- **Phase gate:** main `.github/turnova-phase.json` remains stale (`api=complete`, `android=in_progress`); PR #200 branch metadata correctly remains API `in_progress`, Android/iOS `not_started`. Do not begin Android.
+- **Next exact action:** audit remaining committed-write cancellation races in `CosmosMigrationLeaseStore` create/replace/release, migration-history `CreateItemAsync`, and TTL `ReplaceContainerAsync`; preserve successful commit semantics and ETag fencing. Continue API-only authorization/privacy/OpenAPI and persistence-contract work. Obtain independent maintainer approval; never self-approve or bypass repository protection. After any permitted merge, re-read main and perform a fresh API phase-exit audit before Android Rider.
+
 ## Run 154 — 2026-11-25 — CORS preflight cache-safety regression
 
 - **Platform phase:** API `in_progress`; Android/iOS `not_started`. PR [#200](https://github.com/rajeevp727/turnova-platform/pull/200), branch `test/api-nondev-support-readiness-20261120`; source/test head `2c2ebfc4e73c7972126f52cefd1193a2c780da9f`.
@@ -783,10 +795,10 @@ Live Cosmos partition/ETag/transaction/multi-instance/restart/RU and failover ev
 
 ## Next exact actions
 
-1. Audit `CosmosMigrationDatabase.ReadContainerAsync` provider-await cancellation precedence: determine whether caller cancellation wins when a read fails concurrently, then add deterministic tests and use the shared cancellation-precedence helper if required.
-2. Continue API-only auth/authorization/privacy/OpenAPI and Cosmos persistence-contract audits; do not begin Android until the API phase exit is independently reviewed and verified.
-3. Obtain independent human maintainer review/approval for PR #200. The existing reviews are owner-authored COMMENTED only; never self-approve, bypass protection or merge without repository permission.
-4. After a permitted merge, re-read main and conduct a fresh API phase-exit audit before Android Rider, then Android Driver, iOS Rider and iOS Driver.
+1. Audit remaining committed-write cancellation precedence in `CosmosMigrationLeaseStore.TryCreateAsync`, `TryReplaceAsync`, `TryReleaseAsync`, migration-history `CreateItemAsync`, and TTL `ReplaceContainerAsync`. Preserve successful committed-write semantics and ETag fencing; add deterministic provider-failure/cancellation race tests.
+2. Continue API-only auth/authorization/privacy/OpenAPI and persistence-contract audits. Do not begin Android until the API engineering exit criteria and available API-specific checks are complete and independently reviewed.
+3. Obtain independent human maintainer review/approval for PR #200. The three existing reviews are owner-authored COMMENTED only; never self-approve, bypass protection or merge without repository permission.
+4. After a permitted merge, re-read main and conduct a fresh API phase-exit audit before Android Rider, then Android Driver, iOS Rider and iOS Driver in strict order.
 
 No Docker/container builds or deployments. Never claim production/device/live Cosmos validation unless performed.
 
