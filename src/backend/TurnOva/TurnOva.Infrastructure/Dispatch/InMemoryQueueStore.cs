@@ -130,6 +130,7 @@ public sealed class InMemoryQueueStore : IQueueStore
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        DispatchExceptionAuditInput.Validate(actorId, zoneId, serviceClass, traceId, reasonCategory);
         var key = Key(zoneId, serviceClass);
         var eventId = $"dispatch-exception-{traceId}";
         var deduplicationKey = $"{key}|{traceId}";
