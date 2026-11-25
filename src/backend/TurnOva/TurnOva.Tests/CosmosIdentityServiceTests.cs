@@ -1528,6 +1528,254 @@ public sealed class CosmosIdentityServiceTests
         iterator.Verify(value => value.ReadNextAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact]
+    public async Task RegisterTransactionalBatchProviderFailureTakesPrecedenceOverCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var (container, batch, _) = CreateBatchResponse(HttpStatusCode.OK, success: true);
+        batch.Setup(value => value.ExecuteAsync(It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<TransactionalBatchResponse>(
+                    new InvalidOperationException("identity registration transaction failed"));
+            });
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.RegisterAsync(
+            "rider",
+            new CosmosRegisterRequest("rider@example.com", Password, "Rider"),
+            cancellation.Token));
+
+        batch.Verify(value => value.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Once);
+        Assert.DoesNotContain(container.Invocations, invocation =>
+            invocation.Method.Name is "CreateItemAsync" or "DeleteItemAsync");
+    }
+
+    [Fact]
+    public async Task LoginTokenRotationProviderFailureTakesPrecedenceOverCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var user = CreateIdentity();
+        var (container, _) = SetupIdentityQuery(user);
+        var read = CreateItemResponse(user, "login-write-failure-etag");
+        container.Setup(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                user.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        container.Setup(value => value.ReplaceItemAsync(
+                It.IsAny<CosmosIdentityService.IdentityDocument>(),
+                user.Id,
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<CosmosIdentityService.IdentityDocument>>(
+                    new InvalidOperationException("identity login token rotation failed"));
+            });
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.LoginAsync(
+            "rider",
+            new CosmosLoginRequest(user.Email, Password),
+            cancellation.Token));
+
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(),
+            user.Id,
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task LoginReturnsCommittedSessionWhenCancellationArrivesAfterTokenRotation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var user = CreateIdentity();
+        var (container, _) = SetupIdentityQuery(user);
+        var read = CreateItemResponse(user, "login-committed-write-etag");
+        container.Setup(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                user.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        container.Setup(value => value.ReplaceItemAsync(
+                It.IsAny<CosmosIdentityService.IdentityDocument>(),
+                user.Id,
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(new Mock<ItemResponse<CosmosIdentityService.IdentityDocument>>().Object);
+            });
+        var service = CreateService(container.Object);
+
+        var result = await service.LoginAsync(
+            "rider",
+            new CosmosLoginRequest(user.Email, Password),
+            cancellation.Token);
+
+        Assert.Equal(StatusCodes.Status200OK, GetStatusCode(result));
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(),
+            user.Id,
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RefreshTokenRotationProviderFailureTakesPrecedenceOverCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        const string refreshToken = "refresh-token-write-failure";
+        var user = CreateIdentity(refreshTokenHash: HashRefreshToken(refreshToken));
+        var iterator = CreateQueryIterator(user);
+        var read = CreateItemResponse(user, "refresh-write-failure-etag");
+        var container = new Mock<Container>();
+        container.Setup(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+                It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()))
+            .Returns(iterator.Object);
+        container.Setup(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                user.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        container.Setup(value => value.ReplaceItemAsync(
+                It.IsAny<CosmosIdentityService.IdentityDocument>(),
+                user.Id,
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<CosmosIdentityService.IdentityDocument>>(
+                    new InvalidOperationException("identity refresh token rotation failed"));
+            });
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            service.RefreshAsync(new CosmosRefreshRequest(refreshToken), cancellation.Token));
+
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(),
+            user.Id,
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RefreshReturnsCommittedSessionWhenCancellationArrivesAfterTokenRotation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        const string refreshToken = "refresh-token-committed-write";
+        var user = CreateIdentity(refreshTokenHash: HashRefreshToken(refreshToken));
+        var iterator = CreateQueryIterator(user);
+        var read = CreateItemResponse(user, "refresh-committed-write-etag");
+        var container = new Mock<Container>();
+        container.Setup(value => value.GetItemQueryIterator<CosmosIdentityService.IdentityDocument>(
+                It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()))
+            .Returns(iterator.Object);
+        container.Setup(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                user.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        container.Setup(value => value.ReplaceItemAsync(
+                It.IsAny<CosmosIdentityService.IdentityDocument>(),
+                user.Id,
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(new Mock<ItemResponse<CosmosIdentityService.IdentityDocument>>().Object);
+            });
+        var service = CreateService(container.Object);
+
+        var result = await service.RefreshAsync(
+            new CosmosRefreshRequest(refreshToken),
+            cancellation.Token);
+
+        Assert.Equal(StatusCodes.Status200OK, GetStatusCode(result));
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(),
+            user.Id,
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task LogoutRevocationProviderFailureTakesPrecedenceOverCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var user = CreateIdentity(refreshTokenHash: "active-refresh-hash");
+        var read = CreateItemResponse(user, "logout-write-failure-etag");
+        var container = new Mock<Container>();
+        container.Setup(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                user.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        container.Setup(value => value.ReplaceItemAsync(
+                It.IsAny<CosmosIdentityService.IdentityDocument>(),
+                user.Id,
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromException<ItemResponse<CosmosIdentityService.IdentityDocument>>(
+                    new InvalidOperationException("identity logout revocation failed"));
+            });
+        var service = CreateService(container.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            service.LogoutAsync(CreateRiderPrincipal(), cancellation.Token));
+
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(),
+            user.Id,
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task LogoutReturnsCommittedNoContentWhenCancellationArrivesAfterRevocation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var user = CreateIdentity(refreshTokenHash: "active-refresh-hash");
+        var read = CreateItemResponse(user, "logout-committed-write-etag");
+        var container = new Mock<Container>();
+        container.Setup(value => value.ReadItemAsync<CosmosIdentityService.IdentityDocument>(
+                user.Id, It.IsAny<PartitionKey>(), It.IsAny<ItemRequestOptions?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(read.Object);
+        container.Setup(value => value.ReplaceItemAsync(
+                It.IsAny<CosmosIdentityService.IdentityDocument>(),
+                user.Id,
+                It.IsAny<PartitionKey?>(),
+                It.IsAny<ItemRequestOptions?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(() =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(new Mock<ItemResponse<CosmosIdentityService.IdentityDocument>>().Object);
+            });
+        var service = CreateService(container.Object);
+
+        var result = await service.LogoutAsync(CreateRiderPrincipal(), cancellation.Token);
+
+        Assert.Equal(StatusCodes.Status204NoContent, GetStatusCode(result));
+        container.Verify(value => value.ReplaceItemAsync(
+            It.IsAny<CosmosIdentityService.IdentityDocument>(),
+            user.Id,
+            It.IsAny<PartitionKey?>(),
+            It.IsAny<ItemRequestOptions?>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     private static CosmosIdentityService CreateService(Container container) =>
         new(null, CreateConfiguration(), container);
 
