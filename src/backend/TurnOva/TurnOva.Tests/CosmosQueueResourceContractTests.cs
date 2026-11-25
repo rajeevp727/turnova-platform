@@ -454,6 +454,8 @@ public sealed class CosmosQueueResourceContractTests
     [InlineData("DispatchException", "offer-1", "trace-1", "QueueReadFailed")]
     [InlineData("Joined", null, "trace-1", "QueueReadFailed")]
     [InlineData("DispatchException", null, " ", "QueueReadFailed")]
+    [InlineData("DispatchException", null, "trace/unsafe", "QueueReadFailed")]
+    [InlineData("DispatchException", null, "trace-1", "UnknownReason")]
     public async Task QueueAuditReadRejectsUnknownEventTypesOrInvalidEventSpecificMetadata(
         string eventType, string? offerId, string? traceId, string? reasonCategory)
     {
@@ -468,6 +470,33 @@ public sealed class CosmosQueueResourceContractTests
             offerId,
             traceId,
             reasonCategory));
+        iterator.Setup(value => value.ReadNextAsync(CancellationToken.None)).ReturnsAsync(page.Object);
+        var container = CreateQueryContainer(iterator);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new CosmosQueueStore(container.Object).GetAuditEventsAsync(
+                "hyderabad-central", "cab", CancellationToken.None));
+
+        Assert.Equal("Cosmos returned a malformed queue audit event query item.", exception.Message);
+        iterator.Verify(value => value.HasMoreResults, Times.Once);
+        iterator.Verify(value => value.ReadNextAsync(CancellationToken.None), Times.Once);
+        container.Verify(value => value.GetItemQueryIterator<QueueAuditEvent>(
+            It.IsAny<QueryDefinition>(), It.IsAny<string?>(), It.IsAny<QueryRequestOptions?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task QueueAuditReadRejectsOverlongDispatchExceptionTraceId()
+    {
+        var iterator = new Mock<FeedIterator<QueueAuditEvent>>();
+        iterator.SetupGet(value => value.HasMoreResults).Returns(true);
+        var page = CreatePage(new QueueAuditEvent(
+            "event-1",
+            "hyderabad-central|cab",
+            "driver-1",
+            QueueAuditEventTypes.DispatchException,
+            DateTimeOffset.Parse("2026-11-25T00:00:00Z"),
+            TraceId: new string('a', 129),
+            ReasonCategory: QueueAuditReasonCategories.QueueReadFailed));
         iterator.Setup(value => value.ReadNextAsync(CancellationToken.None)).ReturnsAsync(page.Object);
         var container = CreateQueryContainer(iterator);
 
